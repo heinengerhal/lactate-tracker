@@ -1,5 +1,5 @@
 {
-  "name": "app-1",
+  "name": "lactate-tracker",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -10,9 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.103.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
-    "@supabase/supabase-js": "^2.0.0",
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
