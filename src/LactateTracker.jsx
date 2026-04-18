@@ -1035,7 +1035,7 @@ export default function LactateTracker() {
   useEffect(() => {
     if (!user) return;
     loadSessions().then(setSessions);
-  }, [user]);
+}, [user?.id]);
 
   const css = `
     @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
