@@ -19,8 +19,8 @@ const DARK = {
 };
 const LIGHT = {
   name: "light",
-  bg: "#F0EFE9", surface: "#E5E4DE", surface2: "#D9D8D2",
-  border: "#C4C3BC", text: "#1A1A14", muted: "#888", dim: "#C8C7C0",
+  bg: "#FAFAFC", surface: "#FFFFFF", surface2: "#F4F5F8",
+  border: "#E5E7EB", text: "#1F2937", muted: "#6B7280", dim: "#D1D5DB",
 };
 const Ctx = createContext(DARK);
 const useT = () => useContext(Ctx);
@@ -139,24 +139,58 @@ function linReg(xs, ys) {
   return { slope, intercept, r2: ssTot !== 0 ? Math.max(0, 1 - ssRes / ssTot) : 0, n };
 }
 
-const buildModel = (sessions) => {
-  const all = sessions.flatMap(s => s.entries).filter(e =>
+// Weighted linear regression — recent observations weighted higher via ws[i].
+function linRegWeighted(xs, ys, ws) {
+  const n = xs.length;
+  if (n < 2) return null;
+  const wSum = ws.reduce((a, b) => a + b, 0);
+  if (wSum === 0) return null;
+  const xM = xs.reduce((s, x, i) => s + ws[i] * x, 0) / wSum;
+  const yM = ys.reduce((s, y, i) => s + ws[i] * y, 0) / wSum;
+  const num = xs.reduce((s, x, i) => s + ws[i] * (x - xM) * (ys[i] - yM), 0);
+  const den = xs.reduce((s, x, i) => s + ws[i] * (x - xM) ** 2, 0);
+  if (den === 0) return null;
+  const slope = num / den, intercept = yM - slope * xM;
+  const ssTot = ys.reduce((s, y, i) => s + ws[i] * (y - yM) ** 2, 0);
+  const ssRes = xs.reduce((s, x, i) => s + ws[i] * (ys[i] - (slope * x + intercept)) ** 2, 0);
+  return { slope, intercept, r2: ssTot !== 0 ? Math.max(0, 1 - ssRes / ssTot) : 0, n };
+}
+
+// Exponential-decay weight by age. 60-day halflife: 60d → 0.5, 120d → 0.25, 180d → 0.125.
+const HALFLIFE_MS = 60 * 24 * 60 * 60 * 1000;
+const ageWeight = (dateIso, now) => Math.pow(0.5, (now - new Date(dateIso).getTime()) / HALFLIFE_MS);
+
+const buildModelFor = (entries, now = Date.now()) => {
+  const valid = entries.filter(e =>
     e.lactate >= 1.5 && e.lactate <= 6.5 && paceToSec(e.speed) !== null && e.pulse > 60
   );
-  if (all.length < 3) return null;
-  const xs = all.map(e => paceToSec(e.speed));
-  const ys = all.map(e => e.lactate);
-  const ps = all.map(e => e.pulse);
-  const rXY = linReg(xs, ys);
-  const rPY = linReg(ps, ys);
-  if (!rXY) return null;
-  const paceAt  = lac => rXY.slope === 0 ? null : (lac - rXY.intercept) / rXY.slope;
+  if (valid.length < 3) return null;
+  const xs = valid.map(e => paceToSec(e.speed));
+  const ys = valid.map(e => e.lactate);
+  const ps = valid.map(e => e.pulse);
+  const ws = valid.map(e => ageWeight(e.date, now));
+  const rXY = linRegWeighted(xs, ys, ws);
+  const rPY = linRegWeighted(ps, ys, ws);
+  if (!rXY || rXY.slope === 0) return null;
+  const paceAt  = lac => (lac - rXY.intercept) / rXY.slope;
   const pulseAt = lac => (rPY && rPY.slope !== 0) ? Math.round((lac - rPY.intercept) / rPY.slope) : null;
+  return { paceAt, pulseAt, r2: rXY.r2, n: valid.length, slope: rXY.slope, intercept: rXY.intercept };
+};
+
+const buildModel = (sessions) => {
+  const now = Date.now();
+  const all = sessions.flatMap(s => s.entries.map(e => ({ ...e, date: s.date })));
+  const base = buildModelFor(all, now);
+  if (!base) return null;
+  const perType = {};
+  for (const type of ["Short", "Medium", "Long"]) {
+    perType[type] = buildModelFor(all.filter(e => e.intervalType === type), now) || base;
+  }
   return {
-    lo: paceAt(2.5), hi: paceAt(3.5),
-    loP: pulseAt(2.5), hiP: pulseAt(3.5),
-    r2: rXY.r2, n: all.length,
-    slope: rXY.slope, intercept: rXY.intercept,
+    lo: base.paceAt(2.5), hi: base.paceAt(3.5),
+    loP: base.pulseAt(2.5), hiP: base.pulseAt(3.5),
+    r2: base.r2, n: base.n, slope: base.slope, intercept: base.intercept,
+    perType,
   };
 };
 
@@ -989,13 +1023,19 @@ function ZonesView({ sessions }) {
               Based on {model.n} entries across {sessions.length} sessions
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <ZoneCard label="Lower threshold" lactate="2.5 mmol/L" color="#ADFF2F" pace={secToPace(model.lo)} pulse={model.loP} />
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 4px" }}>
-              <div style={{ fontSize: 9, letterSpacing: 2, color: "#FFD600", fontFamily: "'JetBrains Mono',monospace", whiteSpace: "nowrap" }}>THRESHOLD ZONE</div>
-              <div style={{ flex: 1, height: 1, background: "#FFD60033" }} />
-            </div>
-            <ZoneCard label="Upper threshold" lactate="3.5 mmol/L" color="#FFD600" pace={secToPace(model.hi)} pulse={model.hiP} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <ZoneCard label="Long intervals · 8+ min" lactate="3.5 mmol/L target" color="#10B981"
+              pace={secToPace(model.perType.Long.paceAt(3.5))}
+              pulse={model.perType.Long.pulseAt(3.5)} />
+            <ZoneCard label="Medium intervals · 4–8 min" lactate="3.5 mmol/L target" color="#D97706"
+              pace={secToPace(model.perType.Medium.paceAt(3.5))}
+              pulse={model.perType.Medium.pulseAt(3.5)} />
+            <ZoneCard label="45 / 15 intervals" lactate="3.5 mmol/L target" color="#F59E0B"
+              pace={secToPace(model.perType.Short.paceAt(3.5))}
+              pulse={model.perType.Short.pulseAt(3.5)} />
+            <ZoneCard label="Short intervals · <3 min" lactate="4.5 mmol/L target" color="#EA580C"
+              pace={secToPace(model.perType.Short.paceAt(4.5))}
+              pulse={model.perType.Short.pulseAt(4.5)} />
           </div>
           {drift.length >= 2 && <ThresholdDriftChart drift={drift} />}
           <RacePrediction model={model} />
@@ -1016,7 +1056,7 @@ function ZonesView({ sessions }) {
 export default function LactateTracker() {
   const [sessions, setSessions] = useState([]);
   const [view, setView]         = useState("log");
-  const [isDark, setIsDark]     = useState(true);
+  const [isDark, setIsDark]     = useState(false);
   const [user, setUser]         = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const t = isDark ? DARK : LIGHT;
@@ -1035,11 +1075,10 @@ export default function LactateTracker() {
   useEffect(() => {
     if (!user) return;
     loadSessions().then(setSessions);
-}, [user?.id]);
+  }, [user]);
 
   const css = `
     @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
-     html { scrollbar-gutter: stable; }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     .fade-in { animation: fadeIn .2s ease; }
     @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
