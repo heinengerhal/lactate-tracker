@@ -10,37 +10,67 @@ const supabase = createClient(
 );
 
 // ═══════════════════════════════════════════════════════════════════
-// THEME
+// THEME — sage + parchment + clay
 // ═══════════════════════════════════════════════════════════════════
-const DARK = {
-  name: "dark",
-  bg: "#0A0A0F", surface: "#0F0F1A", surface2: "#141420",
-  border: "#1A1A28", text: "#E0E0E0", muted: "#555", dim: "#252535",
+const T = {
+  // backgrounds
+  bg:         "#FAFAF7",
+  bg2:        "#F3F1EC",
+  surface:    "#FFFFFF",
+
+  // borders
+  border:     "#E8E4DB",
+  borderSoft: "#EEF3EF",
+
+  // text
+  text:       "#1F2A24",
+  textDim:    "#5F6B63",
+  muted:      "#8A9690",
+  dim:        "#C8CEC9",
+
+  // sage (primary)
+  sage100:    "#EEF3EF",
+  sage200:    "#DCE7DF",
+  sage300:    "#B7CCBC",
+  sage400:    "#8AAE92",
+  sage500:    "#5C8C68",
+  sage600:    "#3E6A4B",
+  sage700:    "#2B4B36",
+  sage800:    "#1F3627",
+
+  // clay / warm copper (accent for threshold & key values)
+  clay:       "#D4A574",
+  clayDark:   "#B8864F",
+  claySoft:   "rgba(212,165,116,0.16)",
+
+  // status
+  ok:         "#5A8A5A",
+  warn:       "#C89B3C",
+  danger:     "#A85858",
+
+  // metric hues (muted — not neon)
+  pace:       "#5C8C68",  // sage
+  pulse:      "#A85858",  // clay-red
+  lactate:    "#B8860B",  // deep gold
 };
-const LIGHT = {
-  name: "light",
-  bg: "#FAFAFC", surface: "#FFFFFF", surface2: "#F4F5F8",
-  border: "#E5E7EB", text: "#1F2937", muted: "#6B7280", dim: "#D1D5DB",
-};
-const Ctx = createContext(DARK);
+
+const Ctx = createContext(T);
 const useT = () => useContext(Ctx);
 
 // ═══════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════
-const BORG_VALUES = [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20];
-const BORG_LABELS = {
-  6:"No exertion", 7:"Extremely light", 8:"", 9:"Very light", 10:"",
-  11:"Light", 12:"", 13:"Somewhat hard", 14:"", 15:"Hard",
-  16:"", 17:"Very hard", 18:"", 19:"Extremely hard", 20:"Max exertion",
-};
 const INTERVAL_TYPES = [
   { label: "Short",  sub: "< 3 min" },
   { label: "Medium", sub: "4–8 min" },
   { label: "Long",   sub: "8+ min"  },
 ];
-const INTERVAL_COLORS = { Short: "#00CFFF", Medium: "#FFD600", Long: "#FF6B35" };
-const BLANK_ENTRY = { speed: "", pulse: "", lactate: "", intervalType: "Medium", borg: 13 };
+const INTERVAL_COLORS = {
+  Short:  "#A85858",  // clay-red
+  Medium: "#C89B3C",  // amber
+  Long:   "#5C8C68",  // sage
+};
+const BLANK_ENTRY = { speed: "", pulse: "", lactate: "", intervalType: "Medium" };
 
 // ═══════════════════════════════════════════════════════════════════
 // UTILITIES
@@ -53,11 +83,11 @@ const fmt = (iso, short = false) => {
 };
 
 const zone = (mmol) => {
-  if (mmol < 2.0) return { label: "Aerobic",         color: "#00FF87" };
-  if (mmol < 2.5) return { label: "Sub-threshold",   color: "#ADFF2F" };
-  if (mmol < 3.5) return { label: "Threshold",       color: "#FFD600" };
-  if (mmol < 6.0) return { label: "Supra-threshold", color: "#FF6B35" };
-  return               { label: "Max",              color: "#FF2D55" };
+  if (mmol < 2.0) return { label: "Aerob",         color: T.sage500 };
+  if (mmol < 2.5) return { label: "Sub-terskel",   color: T.sage400 };
+  if (mmol < 3.5) return { label: "Terskel",       color: T.clay    };
+  if (mmol < 6.0) return { label: "Supra-terskel", color: "#C06B4A" };
+  return               { label: "Max",              color: T.danger  };
 };
 
 const paceToSec = (p) => {
@@ -74,7 +104,7 @@ const secToPace = (sec) => {
 };
 
 const validatePace = (v) => {
-  if (!v) return "Required";
+  if (!v) return "Påkrevd";
   return /^\d{1,2}:[0-5]\d$/.test(String(v).trim()) ? null : "Format: m:ss";
 };
 
@@ -109,15 +139,15 @@ const persistSessions = async (sessions) => {
 };
 
 const exportCSV = (sessions) => {
-  const hdr = ["Date","Pace (min/km)","Pulse (bpm)","Lactate (mmol/L)","Zone","Interval Type","Borg RPE","Fatigue Delta (mmol/L)"];
+  const hdr = ["Dato","Fart (min/km)","Puls (bpm)","Laktat (mmol/L)","Sone","Intervalltype","Fatigue Δ (mmol/L)"];
   const rows = [hdr, ...sessions.flatMap(s =>
     s.entries.map(e => [fmt(s.date), e.speed, e.pulse, e.lactate,
-      zone(e.lactate).label, e.intervalType, e.borg,
+      zone(e.lactate).label, e.intervalType,
       e.fatigueDelta != null ? e.fatigueDelta.toFixed(2) : ""])
   )];
   const a = Object.assign(document.createElement("a"), {
     href: URL.createObjectURL(new Blob([rows.map(r => r.join(",")).join("\n")], { type: "text/csv" })),
-    download: `lactate-${new Date().toISOString().slice(0, 10)}.csv`,
+    download: `laktat-${new Date().toISOString().slice(0, 10)}.csv`,
   });
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 };
@@ -139,7 +169,6 @@ function linReg(xs, ys) {
   return { slope, intercept, r2: ssTot !== 0 ? Math.max(0, 1 - ssRes / ssTot) : 0, n };
 }
 
-// Weighted linear regression — recent observations weighted higher via ws[i].
 function linRegWeighted(xs, ys, ws) {
   const n = xs.length;
   if (n < 2) return null;
@@ -156,7 +185,6 @@ function linRegWeighted(xs, ys, ws) {
   return { slope, intercept, r2: ssTot !== 0 ? Math.max(0, 1 - ssRes / ssTot) : 0, n };
 }
 
-// Exponential-decay weight by age. 60-day halflife: 60d → 0.5, 120d → 0.25, 180d → 0.125.
 const HALFLIFE_MS = 60 * 24 * 60 * 60 * 1000;
 const ageWeight = (dateIso, now) => Math.pow(0.5, (now - new Date(dateIso).getTime()) / HALFLIFE_MS);
 
@@ -252,81 +280,121 @@ const computeThresholdDrift = (sessions) => {
 // ═══════════════════════════════════════════════════════════════════
 // SHARED UI ATOMS
 // ═══════════════════════════════════════════════════════════════════
-function SectionLabel({ children, style }) {
-  const t = useT();
+function Card({ children, style, padded = true }) {
   return (
-    <div style={{ fontSize: 10, letterSpacing: 3, color: t.muted,
-      fontFamily: "'JetBrains Mono',monospace", marginBottom: 8, marginTop: 18, ...style }}>
+    <div style={{
+      background: T.surface,
+      border: `1px solid ${T.border}`,
+      borderRadius: 14,
+      boxShadow: "0 1px 2px rgba(42,31,61,.04), 0 4px 12px rgba(42,31,61,.04)",
+      padding: padded ? 20 : 0,
+      ...style,
+    }}>
       {children}
     </div>
   );
 }
 
-function MetricInput({ label, unit, value, onChange, onBlur, placeholder, type, step, color, error }) {
-  const t = useT();
+function Eyebrow({ children, style }) {
   return (
-    <div style={{ background: t.surface, border: `1px solid ${error ? "#FF2D55" : color + "33"}`,
-      borderRadius: 12, padding: "12px 10px", display: "flex", flexDirection: "column", gap: 4 }}>
-      <div style={{ fontSize: 9, letterSpacing: 2, fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color }}>{label}</div>
-      <input type={type} inputMode={type === "number" ? "decimal" : "text"} step={step}
+    <div style={{
+      fontSize: 11, letterSpacing: 2, textTransform: "uppercase",
+      color: T.muted, fontWeight: 500, marginBottom: 10, ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function SectionTitle({ children, sub, right, style }) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between",
+      gap: 12, marginBottom: 16, ...style }}>
+      <div>
+        <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 500,
+          fontSize: 24, color: T.sage800, letterSpacing: "-0.01em", margin: 0 }}>
+          {children}
+        </h2>
+        {sub && <div style={{ fontSize: 13, color: T.textDim, marginTop: 4 }}>{sub}</div>}
+      </div>
+      {right}
+    </div>
+  );
+}
+
+function Pill({ children, color, style }) {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", padding: "3px 10px",
+      borderRadius: 999, fontSize: 11, letterSpacing: .5, fontWeight: 500,
+      background: color + "18",
+      color: color,
+      border: `1px solid ${color}33`,
+      ...style,
+    }}>
+      {children}
+    </span>
+  );
+}
+
+function MetricInput({ label, unit, value, onChange, onBlur, placeholder, type, step, color, error }) {
+  return (
+    <div style={{
+      background: T.surface,
+      border: `1px solid ${error ? T.danger : T.border}`,
+      borderRadius: 12, padding: "12px 14px",
+      display: "flex", flexDirection: "column", gap: 6,
+      transition: "border-color .15s",
+    }}>
+      <div style={{ fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase",
+        fontWeight: 600, color: color || T.textDim }}>{label}</div>
+      <input
+        type={type} inputMode={type === "number" ? "decimal" : "text"} step={step}
         value={value} onChange={e => onChange(e.target.value)} onBlur={onBlur}
         placeholder={placeholder} className="metric-input"
-        style={{ background: "transparent", border: "none", color: t.text, fontSize: 26,
-          fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", width: "100%", padding: 0, caretColor: color }} />
-      <div style={{ fontSize: 9, color: error ? "#FF2D55" : t.muted, fontFamily: "'JetBrains Mono',monospace" }}>
+        style={{
+          background: "transparent", border: "none", color: T.text,
+          fontSize: 28, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 500,
+          width: "100%", padding: 0, caretColor: color || T.sage600,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      />
+      <div style={{ fontSize: 11, color: error ? T.danger : T.muted }}>
         {error || unit}
       </div>
     </div>
   );
 }
 
-function BorgSelector({ value, onChange }) {
-  const t = useT();
+function ZoneCard({ label, sub, lactate, color, pace, pulse }) {
   return (
-    <div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginBottom: 10 }}>
-        <span style={{ fontSize: 52, fontWeight: 900, fontFamily: "'JetBrains Mono',monospace", color: "#FFD600", lineHeight: 1 }}>{value}</span>
-        <span style={{ fontSize: 14, color: t.muted, letterSpacing: 1 }}>{BORG_LABELS[value] || ""}</span>
-      </div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 24, marginBottom: 6 }}>
-        {BORG_VALUES.map(v => {
-          const anchor = !!BORG_LABELS[v], sel = v === value;
-          return (
-            <button key={v} onClick={() => onChange(v)}
-              title={`${v}${BORG_LABELS[v] ? " – " + BORG_LABELS[v] : ""}`}
-              style={{ flex: 1, borderRadius: 2, cursor: "pointer", border: "none", transition: "all .1s",
-                height: anchor ? 20 : 12, background: sel ? "#FFD600" : anchor ? t.dim : t.border,
-                transform: sel ? "scaleY(1.5)" : "none" }} />
-          );
-        })}
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontFamily: "'JetBrains Mono',monospace" }}>
-        <span style={{ color: t.muted }}>6 — No exertion</span>
-        <span style={{ color: "#FF2D55" }}>20 — Max</span>
-      </div>
-    </div>
-  );
-}
-
-function ZoneCard({ label, lactate, color, pace, pulse }) {
-  const t = useT();
-  return (
-    <div style={{ background: t.surface, border: `1px solid ${color}44`, borderRadius: 12,
-      display: "flex", alignItems: "center", overflow: "hidden" }}>
-      <div style={{ width: 4, alignSelf: "stretch", background: color, flexShrink: 0 }} />
-      <div style={{ padding: "12px 14px", flex: 1 }}>
-        <div style={{ color: t.muted, fontSize: 10, letterSpacing: 2, fontFamily: "'JetBrains Mono',monospace" }}>{label.toUpperCase()}</div>
-        <div style={{ color, fontSize: 13, fontFamily: "'JetBrains Mono',monospace", marginTop: 2 }}>{lactate}</div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 16, paddingRight: 16 }}>
-        {[{ val: pace, unit: "min/km", c: "#00CFFF" }, { val: pulse ?? "—", unit: "bpm", c: "#FF2D55" }].map(({ val, unit, c }) => (
-          <div key={unit} style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: c }}>{val}</div>
-            <div style={{ fontSize: 9, color: t.muted, fontFamily: "'JetBrains Mono',monospace" }}>{unit}</div>
+    <Card padded={false} style={{ overflow: "hidden", display: "flex", alignItems: "stretch" }}>
+      <div style={{ width: 4, background: color, flexShrink: 0 }} />
+      <div style={{ padding: "14px 18px", flex: 1, display: "flex", alignItems: "center",
+        justifyContent: "space-between", flexWrap: "wrap", gap: 14 }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 500, color: T.text,
+            fontFamily: "'Fraunces', Georgia, serif" }}>{label}</div>
+          <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
+            {sub} · mål {lactate}
           </div>
-        ))}
+        </div>
+        <div style={{ display: "flex", gap: 22 }}>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 24, fontFamily: "'Fraunces', Georgia, serif",
+              fontWeight: 500, color: T.sage700, fontVariantNumeric: "tabular-nums" }}>{pace}</div>
+            <div style={{ fontSize: 10, color: T.muted, letterSpacing: 1,
+              textTransform: "uppercase" }}>min/km</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 24, fontFamily: "'Fraunces', Georgia, serif",
+              fontWeight: 500, color: T.pulse, fontVariantNumeric: "tabular-nums" }}>{pulse ?? "—"}</div>
+            <div style={{ fontSize: 10, color: T.muted, letterSpacing: 1,
+              textTransform: "uppercase" }}>bpm</div>
+          </div>
+        </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -334,23 +402,22 @@ function ZoneCard({ label, lactate, color, pace, pulse }) {
 // FATIGUE BADGE
 // ═══════════════════════════════════════════════════════════════════
 function FatigueBadge({ fatigue }) {
-  const t = useT();
   if (!fatigue) return null;
   const { delta, level, baseline, n } = fatigue;
-  const colors = { normal: "#00FF87", elevated: "#FFD600", high: "#FF6B35" };
-  const labels = { normal: "Normal", elevated: "Elevated", high: "High fatigue" };
+  const colors = { normal: T.ok, elevated: T.warn, high: T.danger };
+  const labels = { normal: "Normal", elevated: "Forhøyet", high: "Høy fatigue" };
   const c = colors[level];
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-      background: t.surface, borderRadius: 10, border: `1px solid ${c}44`, marginTop: 10 }}>
+      background: c + "12", borderRadius: 10, border: `1px solid ${c}44`, marginTop: 12 }}>
       <div style={{ width: 7, height: 7, borderRadius: "50%", background: c, flexShrink: 0 }} />
       <div style={{ flex: 1 }}>
-        <span style={{ color: c, fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, fontSize: 12 }}>{labels[level]}</span>
-        <span style={{ color: t.muted, fontFamily: "'JetBrains Mono',monospace", fontSize: 11, marginLeft: 8 }}>
+        <span style={{ color: c, fontWeight: 600, fontSize: 13 }}>{labels[level]}</span>
+        <span style={{ color: T.textDim, fontSize: 12, marginLeft: 8 }}>
           {delta >= 0 ? "+" : ""}{delta.toFixed(2)} vs {baseline} baseline
         </span>
       </div>
-      <div style={{ color: t.muted, fontSize: 10, fontFamily: "'JetBrains Mono',monospace" }}>n={n}</div>
+      <div style={{ color: T.muted, fontSize: 11 }}>n={n}</div>
     </div>
   );
 }
@@ -359,7 +426,6 @@ function FatigueBadge({ fatigue }) {
 // LOGIN SCREEN
 // ═══════════════════════════════════════════════════════════════════
 function LoginScreen() {
-  const t = useT();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -376,58 +442,75 @@ function LoginScreen() {
   };
 
   if (sent) return (
-    <div style={{ textAlign: "center", padding: "80px 20px" }}>
-      <div style={{ fontSize: 48, marginBottom: 16 }}>📬</div>
-      <div style={{ color: t.text, fontSize: 16, fontFamily: "'JetBrains Mono',monospace", marginBottom: 8, fontWeight: 700 }}>
-        Check your email
-      </div>
-      <div style={{ color: t.muted, fontSize: 12, fontFamily: "'JetBrains Mono',monospace" }}>
-        We sent a login link to<br />{email}
-      </div>
+    <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center",
+      justifyContent: "center", padding: 24 }}>
+      <Card style={{ maxWidth: 420, width: "100%", textAlign: "center", padding: 40 }}>
+        <div style={{ fontSize: 44, marginBottom: 16 }}>✉</div>
+        <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 500,
+          fontSize: 22, color: T.sage800, margin: 0, marginBottom: 8 }}>
+          Sjekk e-posten din
+        </h2>
+        <div style={{ color: T.textDim, fontSize: 14 }}>
+          Vi har sendt en innloggingslenke til<br /><strong>{email}</strong>
+        </div>
+      </Card>
     </div>
   );
 
   return (
-    <div style={{ padding: "60px 20px 40px" }}>
-      <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: 2, lineHeight: 1, marginBottom: 6 }}>
-        <span style={{ color: "#00FF87", fontFamily: "'JetBrains Mono',monospace" }}>LA</span>
-        <span style={{ color: t.text }}>TRACKER</span>
-      </div>
-      <div style={{ fontSize: 11, color: t.muted, letterSpacing: 2, marginBottom: 40, fontFamily: "'JetBrains Mono',monospace" }}>
-        Lactate · Running · Performance
-      </div>
+    <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center",
+      justifyContent: "center", padding: 24 }}>
+      <Card style={{ maxWidth: 420, width: "100%", padding: 36 }}>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <h1 style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 500,
+            fontSize: 36, color: T.sage800, margin: 0, letterSpacing: "-0.02em" }}>
+            Terskel
+          </h1>
+          <div style={{ fontSize: 13, color: T.muted, marginTop: 6, letterSpacing: 1 }}>
+            Laktat · løping · utvikling
+          </div>
+        </div>
 
-      <SectionLabel style={{ marginTop: 0 }}>SIGN IN</SectionLabel>
-
-      <div style={{ background: t.surface, border: `1px solid #00FF8733`, borderRadius: 12,
-        padding: "12px 10px", marginBottom: 12 }}>
-        <div style={{ fontSize: 9, letterSpacing: 2, fontFamily: "'JetBrains Mono',monospace",
-          fontWeight: 600, color: "#00FF87", marginBottom: 4 }}>EMAIL</div>
+        <Eyebrow>E-post</Eyebrow>
         <input
           type="email"
           value={email}
           onChange={e => setEmail(e.target.value)}
           onKeyDown={e => e.key === "Enter" && handleLogin()}
-          placeholder="your@email.com"
-          style={{ background: "transparent", border: "none", color: t.text, fontSize: 22,
-            fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", width: "100%",
-            padding: 0, outline: "none", caretColor: "#00FF87" }}
+          placeholder="din@epost.no"
+          style={{
+            width: "100%",
+            padding: "12px 14px",
+            fontSize: 15,
+            borderRadius: 12,
+            border: `1px solid ${T.border}`,
+            background: T.surface,
+            color: T.text,
+            outline: "none",
+            fontFamily: "inherit",
+          }}
         />
-      </div>
 
-      <button onClick={handleLogin} disabled={!email || loading}
-        style={{ width: "100%", padding: "14px", border: "none", borderRadius: 12,
-          fontSize: 15, fontWeight: 900, letterSpacing: 2, fontFamily: "'Barlow Condensed',sans-serif",
-          cursor: email && !loading ? "pointer" : "not-allowed", transition: "all .15s",
-          background: email && !loading ? "#00FF87" : t.dim,
-          color: email && !loading ? "#0A0A0F" : t.muted }}>
-        {loading ? "SENDING..." : "SEND LOGIN LINK"}
-      </button>
+        <button onClick={handleLogin} disabled={!email || loading}
+          style={{
+            width: "100%", marginTop: 14,
+            padding: "13px",
+            border: "none", borderRadius: 12,
+            fontSize: 14, fontWeight: 600,
+            fontFamily: "inherit",
+            cursor: email && !loading ? "pointer" : "not-allowed",
+            transition: "all .15s",
+            background: email && !loading ? T.sage600 : T.bg2,
+            color: email && !loading ? "#fff" : T.muted,
+          }}>
+          {loading ? "Sender…" : "Send innloggingslenke"}
+        </button>
 
-      <div style={{ marginTop: 12, color: t.muted, fontSize: 10,
-        fontFamily: "'JetBrains Mono',monospace", textAlign: "center", lineHeight: 1.6 }}>
-        No password needed — we'll email you a magic link
-      </div>
+        <div style={{ marginTop: 16, color: T.muted, fontSize: 12,
+          textAlign: "center", lineHeight: 1.6 }}>
+          Ingen passord — vi sender deg en magisk lenke.
+        </div>
+      </Card>
     </div>
   );
 }
@@ -436,7 +519,6 @@ function LoginScreen() {
 // ENTRY FORM
 // ═══════════════════════════════════════════════════════════════════
 function EntryForm({ initial, onSubmit, submitLabel, onCancel, onFormChange }) {
-  const t = useT();
   const base = { ...BLANK_ENTRY, ...(initial || {}) };
   const [form, setForm] = useState(base);
   const [paceErr, setPaceErr] = useState(null);
@@ -459,64 +541,72 @@ function EntryForm({ initial, onSubmit, submitLabel, onCancel, onFormChange }) {
 
   return (
     <div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-        <MetricInput label="PACE" unit="min/km" value={form.speed}
+      <div className="metric-grid">
+        <MetricInput label="Fart" unit="min/km" value={form.speed}
           onChange={v => { update({ speed: v }); if (paceErr) setPaceErr(validatePace(v)); }}
           onBlur={() => setPaceErr(validatePace(form.speed))}
-          placeholder="4:30" type="text" color="#00CFFF" error={paceErr} />
-        <MetricInput label="PULSE" unit="bpm" value={form.pulse}
-          onChange={v => update({ pulse: v })} placeholder="160" type="number" color="#FF2D55" />
-        <MetricInput label="LACTATE" unit="mmol/L" value={form.lactate}
-          onChange={v => update({ lactate: v })} placeholder="3.2" type="number" step="0.1" color="#00FF87" />
+          placeholder="4:30" type="text" color={T.pace} error={paceErr} />
+        <MetricInput label="Puls" unit="bpm" value={form.pulse}
+          onChange={v => update({ pulse: v })} placeholder="160" type="number" color={T.pulse} />
+        <MetricInput label="Laktat" unit="mmol/L" value={form.lactate}
+          onChange={v => update({ lactate: v })} placeholder="3.2" type="number" step="0.1" color={T.lactate} />
       </div>
 
       {z && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10,
-          padding: "8px 12px", background: t.surface, borderRadius: 10 }}>
-          <div style={{ width: 7, height: 7, borderRadius: "50%", background: z.color, flexShrink: 0 }} />
-          <span style={{ color: z.color, fontFamily: "monospace", fontWeight: 700, fontSize: 13 }}>{z.label}</span>
-          <span style={{ marginLeft: "auto", color: t.muted, fontFamily: "'JetBrains Mono',monospace", fontSize: 11 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14,
+          padding: "10px 14px", background: T.bg2, borderRadius: 10 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: z.color }} />
+          <span style={{ color: z.color, fontWeight: 600, fontSize: 13 }}>{z.label}</span>
+          <span style={{ marginLeft: "auto", color: T.textDim, fontSize: 12,
+            fontVariantNumeric: "tabular-nums" }}>
             {Number(form.lactate).toFixed(1)} mmol/L
           </span>
         </div>
       )}
 
-      <SectionLabel>INTERVAL TYPE</SectionLabel>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        {INTERVAL_TYPES.map(({ label, sub }) => (
-          <button key={label} onClick={() => update({ intervalType: label })}
-            style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "1px solid",
-              background: "transparent", fontFamily: "'Barlow Condensed',sans-serif",
-              fontSize: 14, fontWeight: 700, letterSpacing: 1, cursor: "pointer",
-              transition: "all .15s", display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-              ...(form.intervalType === label
-                ? { background: INTERVAL_COLORS[label], color: "#0A0A0F", borderColor: INTERVAL_COLORS[label] }
-                : { borderColor: INTERVAL_COLORS[label] + "55", color: INTERVAL_COLORS[label] }) }}>
-            <span style={{ fontWeight: 800 }}>{label}</span>
-            <span style={{ fontSize: 9, opacity: .75, fontFamily: "'JetBrains Mono',monospace" }}>{sub}</span>
-          </button>
-        ))}
+      <Eyebrow style={{ marginTop: 22 }}>Intervalltype</Eyebrow>
+      <div style={{ display: "flex", gap: 8 }}>
+        {INTERVAL_TYPES.map(({ label, sub }) => {
+          const selected = form.intervalType === label;
+          const c = INTERVAL_COLORS[label];
+          return (
+            <button key={label} onClick={() => update({ intervalType: label })}
+              style={{
+                flex: 1, padding: "10px 8px", borderRadius: 10,
+                border: `1px solid ${selected ? c : T.border}`,
+                background: selected ? c + "1a" : T.surface,
+                color: selected ? c : T.textDim,
+                fontFamily: "inherit", fontSize: 13, fontWeight: 500,
+                cursor: "pointer", transition: "all .15s",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+              }}>
+              <span style={{ fontWeight: 600 }}>{label}</span>
+              <span style={{ fontSize: 11, color: T.muted }}>{sub}</span>
+            </button>
+          );
+        })}
       </div>
 
-      <SectionLabel style={{ marginTop: 0 }}>BORG RPE</SectionLabel>
-      <BorgSelector value={form.borg} onChange={v => update({ borg: v })} />
-
-      <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+      <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
         {onCancel && (
           <button onClick={onCancel}
-            style={{ flex: "0 0 90px", padding: "12px", background: "transparent",
-              border: `1px solid ${t.border}`, borderRadius: 12, color: t.muted,
-              fontSize: 13, fontWeight: 700, letterSpacing: 1,
-              fontFamily: "'Barlow Condensed',sans-serif", cursor: "pointer" }}>
-            CANCEL
+            style={{
+              flex: "0 0 110px", padding: "12px", background: "transparent",
+              border: `1px solid ${T.border}`, borderRadius: 12, color: T.textDim,
+              fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
+            }}>
+            Avbryt
           </button>
         )}
-        <button onClick={trySubmit} disabled={!ready} className="save-btn"
-          style={{ flex: 1, padding: "12px",
-            background: ready ? "#00FF87" : t.dim, color: ready ? "#0A0A0F" : t.muted,
-            border: "none", borderRadius: 12, fontSize: 15, fontWeight: 900, letterSpacing: 2,
-            fontFamily: "'Barlow Condensed',sans-serif",
-            cursor: ready ? "pointer" : "not-allowed", transition: "all .15s" }}>
+        <button onClick={trySubmit} disabled={!ready}
+          style={{
+            flex: 1, padding: "12px",
+            background: ready ? T.sage600 : T.bg2,
+            color: ready ? "#fff" : T.muted,
+            border: "none", borderRadius: 12, fontSize: 14, fontWeight: 600,
+            fontFamily: "inherit",
+            cursor: ready ? "pointer" : "not-allowed", transition: "all .15s",
+          }}>
           {submitLabel}
         </button>
       </div>
@@ -528,16 +618,17 @@ function EntryForm({ initial, onSubmit, submitLabel, onCancel, onFormChange }) {
 // EDIT MODAL
 // ═══════════════════════════════════════════════════════════════════
 function EditModal({ entry, onSave, onClose }) {
-  const t = useT();
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.65)", backdropFilter: "blur(6px)" }} onClick={onClose} />
-      <div style={{ position: "relative", background: t.bg, borderRadius: "20px 20px 0 0",
-        padding: "20px 20px 40px", maxWidth: 440, margin: "0 auto", width: "100%",
-        boxShadow: "0 -24px 60px rgba(0,0,0,.4)", animation: "slideUp .25s cubic-bezier(.16,1,.3,1)" }}>
-        <div style={{ width: 36, height: 4, borderRadius: 2, background: t.border, margin: "0 auto 16px" }} />
-        <SectionLabel style={{ marginTop: 0 }}>EDIT ENTRY</SectionLabel>
-        <EntryForm initial={entry} onSubmit={onSave} submitLabel="UPDATE ENTRY" onCancel={onClose} />
+    <div style={{ position: "fixed", inset: 0, zIndex: 200,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ position: "absolute", inset: 0, background: "rgba(31,42,36,0.35)",
+        backdropFilter: "blur(4px)" }} onClick={onClose} />
+      <div style={{ position: "relative", width: "100%", maxWidth: 520,
+        animation: "slideUp .25s cubic-bezier(.16,1,.3,1)" }}>
+        <Card style={{ padding: 28 }}>
+          <SectionTitle>Endre måling</SectionTitle>
+          <EntryForm initial={entry} onSubmit={onSave} submitLabel="Oppdater måling" onCancel={onClose} />
+        </Card>
       </div>
     </div>
   );
@@ -547,44 +638,48 @@ function EditModal({ entry, onSave, onClose }) {
 // SPARKLINE
 // ═══════════════════════════════════════════════════════════════════
 function LactateTrend({ sessions }) {
-  const t = useT();
   if (sessions.length < 2) return null;
   const recent = sessions.slice(0, 12).reverse();
   const avgs = recent.map(s => s.entries.reduce((a, e) => a + e.lactate, 0) / s.entries.length);
-  const W = 310, H = 68, P = { t: 8, r: 8, b: 20, l: 28 };
+  const W = 600, H = 90, P = { t: 8, r: 10, b: 22, l: 32 };
   const pW = W - P.l - P.r, pH = H - P.t - P.b;
   const minY = Math.min(1.0, ...avgs) - 0.2, maxY = Math.max(4.5, ...avgs) + 0.2;
   const X = i => P.l + (i / Math.max(recent.length - 1, 1)) * pW;
   const Y = v => P.t + pH - ((v - minY) / (maxY - minY || 1)) * pH;
   const pts = avgs.map((v, i) => `${X(i)},${Y(v)}`).join(" ");
   const trend = avgs.length > 1 ? avgs[avgs.length - 1] - avgs[0] : 0;
-  const tC = trend < -0.3 ? "#00FF87" : trend > 0.3 ? "#FF6B35" : "#FFD600";
-  const tL = trend < -0.3 ? "↓ Improving" : trend > 0.3 ? "↑ Rising" : "→ Stable";
+  const tC = trend < -0.3 ? T.ok : trend > 0.3 ? T.danger : T.warn;
+  const tL = trend < -0.3 ? "↓ Fremgang" : trend > 0.3 ? "↑ Stiger" : "→ Stabil";
   return (
-    <div style={{ background: t.surface, borderRadius: 12, padding: "12px 14px",
-      border: `1px solid ${t.border}`, marginBottom: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span style={{ fontSize: 10, letterSpacing: 2, color: t.muted, fontFamily: "'JetBrains Mono',monospace" }}>LACTATE TREND</span>
-        <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono',monospace", color: tC, fontWeight: 700 }}>{tL}</span>
+    <Card style={{ padding: "16px 20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between",
+        alignItems: "center", marginBottom: 10 }}>
+        <span style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase",
+          color: T.muted }}>Laktat-trend</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: tC }}>{tL}</span>
       </div>
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", overflow: "visible" }}>
-        <rect x={P.l} y={Y(3.5)} width={pW} height={Math.max(0, Y(2.5) - Y(3.5))} fill="#FFD60012" stroke="#FFD60030" strokeWidth={0.5} />
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+        style={{ display: "block", overflow: "visible", height: 90 }}>
+        <rect x={P.l} y={Y(3.5)} width={pW} height={Math.max(0, Y(2.5) - Y(3.5))}
+          fill={T.claySoft} stroke={T.clay + "55"} strokeWidth={0.5} />
         {[2, 3, 4].map(v => (
           <g key={v}>
-            <line x1={P.l} x2={W - P.r} y1={Y(v)} y2={Y(v)} stroke={t.border} strokeWidth={1} />
-            <text x={P.l - 3} y={Y(v) + 4} textAnchor="end" fill={t.muted} fontSize={8} fontFamily="JetBrains Mono,monospace">{v}</text>
+            <line x1={P.l} x2={W - P.r} y1={Y(v)} y2={Y(v)} stroke={T.border} strokeWidth={1} />
+            <text x={P.l - 4} y={Y(v) + 4} textAnchor="end" fill={T.muted} fontSize={9}>{v}</text>
           </g>
         ))}
-        <polyline points={pts} fill="none" stroke="#00FF87" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        <polyline points={pts} fill="none" stroke={T.sage600} strokeWidth={2}
+          strokeLinejoin="round" strokeLinecap="round" />
         {avgs.map((v, i) => (
-          <circle key={i} cx={X(i)} cy={Y(v)} r={3.5} fill={zone(v).color} stroke={t.bg} strokeWidth={1.5} />
+          <circle key={i} cx={X(i)} cy={Y(v)} r={4} fill={zone(v).color}
+            stroke={T.surface} strokeWidth={1.5} />
         ))}
         {recent.map((s, i) => (i === 0 || i === recent.length - 1) && (
-          <text key={i} x={X(i)} y={H} textAnchor={i === 0 ? "start" : "end"}
-            fill={t.muted} fontSize={7} fontFamily="JetBrains Mono,monospace">{fmt(s.date, true)}</text>
+          <text key={i} x={X(i)} y={H - 4} textAnchor={i === 0 ? "start" : "end"}
+            fill={T.muted} fontSize={9}>{fmt(s.date, true)}</text>
         ))}
       </svg>
-    </div>
+    </Card>
   );
 }
 
@@ -592,9 +687,8 @@ function LactateTrend({ sessions }) {
 // THRESHOLD DRIFT CHART
 // ═══════════════════════════════════════════════════════════════════
 function ThresholdDriftChart({ drift }) {
-  const t = useT();
   if (drift.length < 2) return null;
-  const W = 310, H = 90, P = { t: 10, r: 10, b: 28, l: 44 };
+  const W = 600, H = 120, P = { t: 14, r: 14, b: 30, l: 52 };
   const pW = W - P.l - P.r, pH = H - P.t - P.b;
   const paces = drift.map(d => d.paceSec);
   const minP = Math.min(...paces) - 8, maxP = Math.max(...paces) + 8;
@@ -602,36 +696,40 @@ function ThresholdDriftChart({ drift }) {
   const Y = sec => P.t + ((sec - minP) / (maxP - minP || 1)) * pH;
   const pts = drift.map((d, i) => `${X(i)},${Y(d.paceSec)}`).join(" ");
   const improved = drift[drift.length - 1].paceSec < drift[0].paceSec;
-  const lineColor = improved ? "#00FF87" : "#FF6B35";
+  const lineColor = improved ? T.ok : T.danger;
   const delta = drift[drift.length - 1].paceSec - drift[0].paceSec;
   const deltaStr = (delta < 0 ? "↓ " : "↑ +") + secToPace(Math.abs(delta)) + " min/km";
   return (
-    <div style={{ background: t.surface, borderRadius: 12, padding: "12px 14px",
-      border: `1px solid ${t.border}`, marginTop: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <span style={{ fontSize: 10, letterSpacing: 2, color: t.muted, fontFamily: "'JetBrains Mono',monospace" }}>THRESHOLD DRIFT</span>
-        <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: lineColor }}>{deltaStr}</span>
+    <Card style={{ padding: "16px 20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between",
+        alignItems: "center", marginBottom: 12 }}>
+        <span style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase",
+          color: T.muted }}>Terskel-drift</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: lineColor }}>{deltaStr}</span>
       </div>
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", overflow: "visible" }}>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+        style={{ display: "block", overflow: "visible", height: 120 }}>
         {[minP + 10, (minP + maxP) / 2, maxP - 10].map((sec, i) => (
           <g key={i}>
-            <line x1={P.l} x2={W - P.r} y1={Y(sec)} y2={Y(sec)} stroke={t.border} strokeWidth={1} />
-            <text x={P.l - 4} y={Y(sec) + 4} textAnchor="end" fill={t.muted} fontSize={8} fontFamily="JetBrains Mono,monospace">{secToPace(sec)}</text>
+            <line x1={P.l} x2={W - P.r} y1={Y(sec)} y2={Y(sec)} stroke={T.border} strokeWidth={1} />
+            <text x={P.l - 6} y={Y(sec) + 4} textAnchor="end" fill={T.muted} fontSize={9}>{secToPace(sec)}</text>
           </g>
         ))}
-        <polyline points={pts} fill="none" stroke={lineColor} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+        <polyline points={pts} fill="none" stroke={lineColor} strokeWidth={2.5}
+          strokeLinejoin="round" strokeLinecap="round" />
         {drift.map((d, i) => (
-          <circle key={i} cx={X(i)} cy={Y(d.paceSec)} r={4} fill={lineColor} stroke={t.bg} strokeWidth={1.5} />
+          <circle key={i} cx={X(i)} cy={Y(d.paceSec)} r={4.5} fill={lineColor}
+            stroke={T.surface} strokeWidth={1.5} />
         ))}
         {[0, drift.length - 1].map(i => (
-          <text key={i} x={X(i)} y={H} textAnchor={i === 0 ? "start" : "end"}
-            fill={t.muted} fontSize={7} fontFamily="JetBrains Mono,monospace">{drift[i].month}</text>
+          <text key={i} x={X(i)} y={H - 4} textAnchor={i === 0 ? "start" : "end"}
+            fill={T.muted} fontSize={9}>{drift[i].month}</text>
         ))}
       </svg>
-      <div style={{ marginTop: 6, fontSize: 10, color: t.muted, fontFamily: "'JetBrains Mono',monospace" }}>
-        Threshold pace at 3.0 mmol/L · faster = improvement
+      <div style={{ marginTop: 8, fontSize: 12, color: T.muted }}>
+        Terskelfart ved 3.0 mmol/L · raskere = fremgang
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -650,7 +748,6 @@ function formatRaceTime(totalSeconds) {
 }
 
 function RacePrediction({ model }) {
-  const t = useT();
   const hmPaceSec = model.slope === 0 ? null : (3.0 - model.intercept) / model.slope;
   const fmPaceSec = model.lo;
   if (!hmPaceSec || !fmPaceSec || hmPaceSec <= 0 || fmPaceSec <= 0) return null;
@@ -660,47 +757,48 @@ function RacePrediction({ model }) {
   const fmFinalSec = (fmTimeSec + hmTimeSec * Math.pow(FM_DIST / HM_DIST, RIEGEL)) / 2;
   const fmFinalPace = fmFinalSec / FM_DIST;
   const races = [
-    { label: "Half Marathon", dist: "21.1 km", lacRef: "3.0 mmol/L", time: hmTimeSec, pace: hmPaceSec, color: "#FFD600",
-      sub: hmTimeSec < 5400 ? "Sub-90" : hmTimeSec < 6000 ? "Sub-100" : null },
-    { label: "Marathon", dist: "42.2 km", lacRef: "2.5 mmol/L", time: fmFinalSec, pace: fmFinalPace, color: "#00FF87",
+    { label: "Halvmaraton", dist: "21.1 km", lacRef: "3.0 mmol/L",
+      time: hmTimeSec, pace: hmPaceSec, color: T.clay,
+      sub: hmTimeSec < 5400 ? "Sub-90" : hmTimeSec < 6000 ? "Sub-1:40" : null },
+    { label: "Maraton", dist: "42.2 km", lacRef: "2.5 mmol/L",
+      time: fmFinalSec, pace: fmFinalPace, color: T.sage600,
       sub: fmFinalSec < 10800 ? "Sub-3:00" : fmFinalSec < 11400 ? "Sub-3:10" : fmFinalSec < 12000 ? "Sub-3:20" : null },
   ];
   return (
-    <div style={{ marginTop: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <div style={{ fontSize: 10, letterSpacing: 3, color: t.muted, fontFamily: "'JetBrains Mono',monospace" }}>RACE PREDICTIONS</div>
-        <div style={{ flex: 1, height: 1, background: t.border }} />
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div>
+      <SectionTitle style={{ marginTop: 8 }}>Løpsprognoser</SectionTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
         {races.map(r => (
-          <div key={r.label} style={{ background: t.surface, borderRadius: 14, border: `1px solid ${r.color}33`,
-            overflow: "hidden", display: "flex", alignItems: "stretch" }}>
+          <Card key={r.label} padded={false} style={{ overflow: "hidden",
+            display: "flex", alignItems: "stretch" }}>
             <div style={{ width: 4, background: r.color, flexShrink: 0 }} />
-            <div style={{ flex: 1, padding: "14px 16px" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
+            <div style={{ flex: 1, padding: "16px 20px" }}>
+              <div style={{ display: "flex", alignItems: "flex-start",
+                justifyContent: "space-between", marginBottom: 10 }}>
                 <div>
-                  <div style={{ fontSize: 17, fontWeight: 900, letterSpacing: 1, fontFamily: "'Barlow Condensed',sans-serif", color: t.text }}>{r.label}</div>
-                  <div style={{ fontSize: 10, color: t.muted, fontFamily: "'JetBrains Mono',monospace", marginTop: 2 }}>{r.dist} · based on {r.lacRef}</div>
-                </div>
-                {r.sub && (
-                  <div style={{ background: r.color + "22", border: `1px solid ${r.color}55`, borderRadius: 20,
-                    padding: "3px 10px", fontSize: 11, fontFamily: "'JetBrains Mono',monospace", color: r.color, fontWeight: 700 }}>
-                    {r.sub}
+                  <div style={{ fontSize: 17, fontFamily: "'Fraunces', Georgia, serif",
+                    fontWeight: 500, color: T.text }}>{r.label}</div>
+                  <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
+                    {r.dist} · basert på {r.lacRef}
                   </div>
-                )}
+                </div>
+                {r.sub && <Pill color={r.color}>{r.sub}</Pill>}
               </div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-                <span style={{ fontSize: 42, fontWeight: 900, fontFamily: "'JetBrains Mono',monospace", color: r.color, lineHeight: 1 }}>
+                <span style={{ fontSize: 36, fontFamily: "'Fraunces', Georgia, serif",
+                  fontWeight: 500, color: r.color, lineHeight: 1,
+                  fontVariantNumeric: "tabular-nums" }}>
                   {formatRaceTime(r.time)}
                 </span>
-                <div style={{ fontSize: 13, fontFamily: "'JetBrains Mono',monospace", color: t.muted }}>{secToPace(r.pace)} /km</div>
+                <div style={{ fontSize: 13, color: T.textDim,
+                  fontVariantNumeric: "tabular-nums" }}>{secToPace(r.pace)} /km</div>
               </div>
             </div>
-          </div>
+          </Card>
         ))}
       </div>
-      <div style={{ marginTop: 10, fontSize: 10, color: t.muted, fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.7 }}>
-        HM based on threshold midpoint pace · FM averaged from lactate model + Riegel projection from HM (exp 1.06).
+      <div style={{ marginTop: 12, fontSize: 12, color: T.muted, lineHeight: 1.7 }}>
+        HM basert på terskel-pace · FM fra laktatmodell kombinert med Riegel fra HM (eksp. 1.06).
       </div>
     </div>
   );
@@ -710,38 +808,45 @@ function RacePrediction({ model }) {
 // SCATTER PLOT
 // ═══════════════════════════════════════════════════════════════════
 function LactateScatter({ sessions, model }) {
-  const t = useT();
-  const all = sessions.flatMap(s => s.entries).filter(e => e.lactate >= 1.0 && e.lactate <= 7.5 && paceToSec(e.speed) !== null);
+  const all = sessions.flatMap(s => s.entries).filter(e =>
+    e.lactate >= 1.0 && e.lactate <= 7.5 && paceToSec(e.speed) !== null);
   if (!all.length) return null;
-  const W = 310, H = 150, P = { t: 10, r: 10, b: 28, l: 32 };
+  const W = 600, H = 200, P = { t: 14, r: 14, b: 30, l: 40 };
   const pW = W - P.l - P.r, pH = H - P.t - P.b;
   const paces = all.map(e => paceToSec(e.speed));
   const minP = Math.min(...paces) - 15, maxP = Math.max(...paces) + 15;
   const px = p => P.l + (p - minP) / (maxP - minP) * pW;
   const py = l => P.t + pH - ((l - 1.0) / 6.5) * pH;
   return (
-    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", overflow: "visible" }}>
-      <rect x={P.l} y={py(3.5)} width={pW} height={Math.max(0, py(2.5) - py(3.5))} fill="#FFD60012" stroke="#FFD60030" strokeWidth={1} />
-      {[2, 3, 4, 5, 6].map(l => (
-        <g key={l}>
-          <line x1={P.l} x2={W - P.r} y1={py(l)} y2={py(l)} stroke={t.border} strokeWidth={1} />
-          <text x={P.l - 4} y={py(l) + 4} textAnchor="end" fill={t.muted} fontSize={8} fontFamily="JetBrains Mono,monospace">{l}</text>
-        </g>
-      ))}
-      <line x1={px(minP)} y1={py(model.slope * minP + model.intercept)}
-        x2={px(maxP)} y2={py(model.slope * maxP + model.intercept)}
-        stroke="#FFD600" strokeWidth={1.5} strokeDasharray="5 3" opacity={.65} />
-      {all.map((e, i) => {
-        const z = zone(e.lactate);
-        return <circle key={i} cx={px(paceToSec(e.speed))} cy={py(e.lactate)}
-          r={5} fill={z.color} fillOpacity={.85} stroke={t.bg} strokeWidth={1.5} />;
-      })}
-      <text x={8} y={H / 2} textAnchor="middle" fill={t.muted} fontSize={8}
-        fontFamily="JetBrains Mono,monospace" transform={`rotate(-90,8,${H / 2})`}>mmol/L</text>
-      {[minP + 20, (minP + maxP) / 2, maxP - 20].map((s, i) => (
-        <text key={i} x={px(s)} y={H - 2} textAnchor="middle" fill={t.muted} fontSize={8} fontFamily="JetBrains Mono,monospace">{secToPace(s)}</text>
-      ))}
-    </svg>
+    <Card style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase",
+        color: T.muted, marginBottom: 10 }}>Målinger — fart vs laktat</div>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+        style={{ display: "block", overflow: "visible", height: 200 }}>
+        <rect x={P.l} y={py(3.5)} width={pW} height={Math.max(0, py(2.5) - py(3.5))}
+          fill={T.claySoft} stroke={T.clay + "55"} strokeWidth={1} />
+        {[2, 3, 4, 5, 6].map(l => (
+          <g key={l}>
+            <line x1={P.l} x2={W - P.r} y1={py(l)} y2={py(l)} stroke={T.border} strokeWidth={1} />
+            <text x={P.l - 5} y={py(l) + 4} textAnchor="end" fill={T.muted} fontSize={9}>{l}</text>
+          </g>
+        ))}
+        <line x1={px(minP)} y1={py(model.slope * minP + model.intercept)}
+          x2={px(maxP)} y2={py(model.slope * maxP + model.intercept)}
+          stroke={T.clay} strokeWidth={1.5} strokeDasharray="5 3" opacity={.75} />
+        {all.map((e, i) => {
+          const z = zone(e.lactate);
+          return <circle key={i} cx={px(paceToSec(e.speed))} cy={py(e.lactate)}
+            r={5} fill={z.color} fillOpacity={.85} stroke={T.surface} strokeWidth={1.5} />;
+        })}
+        <text x={10} y={H / 2} textAnchor="middle" fill={T.muted} fontSize={10}
+          transform={`rotate(-90,10,${H / 2})`}>mmol/L</text>
+        {[minP + 20, (minP + maxP) / 2, maxP - 20].map((s, i) => (
+          <text key={i} x={px(s)} y={H - 6} textAnchor="middle"
+            fill={T.muted} fontSize={9}>{secToPace(s)}</text>
+        ))}
+      </svg>
+    </Card>
   );
 }
 
@@ -749,7 +854,6 @@ function LactateScatter({ sessions, model }) {
 // LOG VIEW
 // ═══════════════════════════════════════════════════════════════════
 function LogView({ sessions, setSessions }) {
-  const t = useT();
   const [staged, setStaged]     = useState([]);
   const [flashSaved, setFlash]  = useState(false);
   const [liveForm, setLiveForm] = useState({});
@@ -774,54 +878,69 @@ function LogView({ sessions, setSessions }) {
     setFlash(true); setTimeout(() => setFlash(false), 2500);
   };
 
-  const fdColor = (fd) => fd == null ? t.muted : fd > 0.8 ? "#FF6B35" : fd > 0.4 ? "#FFD600" : "#00FF87";
+  const fdColor = (fd) => fd == null ? T.muted : fd > 0.8 ? T.danger : fd > 0.4 ? T.warn : T.ok;
 
   return (
     <div className="fade-in">
-      <SectionLabel style={{ marginTop: 0 }}>ADD ENTRY</SectionLabel>
-      <EntryForm key={staged.length} onSubmit={addEntry} submitLabel="ADD TO SESSION" onFormChange={f => setLiveForm(f)} />
-      {liveFatigue && <FatigueBadge fatigue={liveFatigue} />}
+      <SectionTitle sub="Legg til målinger for dagens økt">Ny økt</SectionTitle>
+      <Card>
+        <EntryForm key={staged.length} onSubmit={addEntry} submitLabel="Legg til måling"
+          onFormChange={f => setLiveForm(f)} />
+        {liveFatigue && <FatigueBadge fatigue={liveFatigue} />}
+      </Card>
 
       {staged.length > 0 && (
-        <div style={{ marginTop: 22 }} className="fade-in">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <SectionLabel style={{ margin: 0 }}>THIS SESSION — {staged.length} {staged.length === 1 ? "ENTRY" : "ENTRIES"}</SectionLabel>
+        <div style={{ marginTop: 24 }} className="fade-in">
+          <div style={{ display: "flex", justifyContent: "space-between",
+            alignItems: "center", marginBottom: 12 }}>
+            <Eyebrow style={{ margin: 0 }}>
+              Denne økten — {staged.length} {staged.length === 1 ? "måling" : "målinger"}
+            </Eyebrow>
             <button onClick={() => setStaged([])}
-              style={{ background: "transparent", border: "none", color: t.muted, fontSize: 11, fontFamily: "'JetBrains Mono',monospace", cursor: "pointer" }}>
-              Clear all
+              style={{ background: "transparent", border: "none", color: T.muted,
+                fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+              Tøm alle
             </button>
           </div>
-          <div style={{ background: t.surface, borderRadius: 12, overflow: "hidden", border: `1px solid ${t.border}` }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 60px 36px 56px 28px",
-              padding: "6px 12px", background: t.bg, borderBottom: `1px solid ${t.border}` }}>
-              {["PACE","BPM","LA","TYPE","RPE","FAT.",""].map(h => (
-                <div key={h} style={{ fontSize: 8, letterSpacing: 1.5, color: t.muted, fontFamily: "'JetBrains Mono',monospace", textAlign: "center" }}>{h}</div>
-              ))}
+          <Card padded={false} style={{ overflow: "hidden" }}>
+            <div className="entry-row entry-head">
+              <div>Fart</div>
+              <div>Puls</div>
+              <div>Laktat</div>
+              <div>Type</div>
+              <div>Fatigue</div>
+              <div></div>
             </div>
             {staged.map((e, i) => {
               const z = zone(e.lactate);
               return (
-                <div key={e.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 60px 36px 56px 28px",
-                  padding: "9px 12px", alignItems: "center", borderTop: i > 0 ? `1px solid ${t.border}` : "none" }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: "#00CFFF", textAlign: "center" }}>{e.speed}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: "#FF2D55", textAlign: "center" }}>{e.pulse}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: z.color, textAlign: "center" }}>{e.lactate}</span>
-                  <span style={{ fontSize: 11, fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 700, color: INTERVAL_COLORS[e.intervalType], textAlign: "center" }}>{e.intervalType}</span>
-                  <span style={{ fontSize: 12, fontFamily: "'JetBrains Mono',monospace", color: "#FFD600", textAlign: "center" }}>{e.borg}</span>
-                  <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono',monospace", color: fdColor(e.fatigueDelta), textAlign: "center" }}>
-                    {e.fatigueDelta != null ? (e.fatigueDelta >= 0 ? `+${e.fatigueDelta.toFixed(1)}` : e.fatigueDelta.toFixed(1)) : "—"}
+                <div key={e.id} className="entry-row"
+                  style={{ borderTop: i > 0 ? `1px solid ${T.border}` : "none" }}>
+                  <span className="num" style={{ color: T.pace }}>{e.speed}</span>
+                  <span className="num" style={{ color: T.pulse }}>{e.pulse}</span>
+                  <span className="num" style={{ color: z.color }}>{e.lactate}</span>
+                  <span style={{ fontSize: 12, fontWeight: 500,
+                    color: INTERVAL_COLORS[e.intervalType] }}>{e.intervalType}</span>
+                  <span className="num" style={{ color: fdColor(e.fatigueDelta) }}>
+                    {e.fatigueDelta != null
+                      ? (e.fatigueDelta >= 0 ? `+${e.fatigueDelta.toFixed(1)}` : e.fatigueDelta.toFixed(1))
+                      : "—"}
                   </span>
                   <button onClick={() => setStaged(prev => prev.filter(x => x.id !== e.id))}
-                    style={{ background: "transparent", border: "none", color: t.muted, fontSize: 14, cursor: "pointer", textAlign: "center" }}>✕</button>
+                    style={{ background: "transparent", border: "none", color: T.muted,
+                      fontSize: 15, cursor: "pointer" }}>✕</button>
                 </div>
               );
             })}
-          </div>
-          <button onClick={saveSession} className="save-btn"
-            style={{ width: "100%", marginTop: 10, padding: "15px", background: "#00FF87",
-              color: "#0A0A0F", border: "none", borderRadius: 14, fontSize: 17, fontWeight: 900,
-              letterSpacing: 3, fontFamily: "'Barlow Condensed',sans-serif", cursor: "pointer", transition: "all .15s" }}>
-            {flashSaved ? "✓ SESSION SAVED" : "SAVE SESSION"}
+          </Card>
+          <button onClick={saveSession}
+            style={{
+              width: "100%", marginTop: 14, padding: "14px",
+              background: T.sage600, color: "#fff",
+              border: "none", borderRadius: 12, fontSize: 15, fontWeight: 600,
+              fontFamily: "inherit", cursor: "pointer", transition: "all .15s",
+            }}>
+            {flashSaved ? "✓ Økten er lagret" : "Lagre økt"}
           </button>
         </div>
       )}
@@ -833,7 +952,6 @@ function LogView({ sessions, setSessions }) {
 // HISTORY VIEW
 // ═══════════════════════════════════════════════════════════════════
 function HistoryView({ sessions, setSessions }) {
-  const t = useT();
   const [expandedId, setExpandedId] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
   const [delConfirm, setDelConfirm] = useState(null);
@@ -858,12 +976,15 @@ function HistoryView({ sessions, setSessions }) {
     setExpandedId(null); setDelConfirm(null);
   };
 
-  const fdColor = (fd) => fd == null ? t.muted : fd > 0.8 ? "#FF6B35" : fd > 0.4 ? "#FFD600" : "#00FF87";
+  const fdColor = (fd) => fd == null ? T.muted : fd > 0.8 ? T.danger : fd > 0.4 ? T.warn : T.ok;
 
   if (!sessions.length) return (
-    <div className="fade-in" style={{ textAlign: "center", padding: "60px 20px" }}>
-      <div style={{ fontSize: 40, fontFamily: "monospace", color: t.border, marginBottom: 10 }}>—</div>
-      <div style={{ color: t.muted, fontSize: 13, fontFamily: "'JetBrains Mono',monospace" }}>No sessions logged yet.</div>
+    <div className="fade-in">
+      <SectionTitle>Historikk</SectionTitle>
+      <Card style={{ textAlign: "center", padding: 60 }}>
+        <div style={{ fontSize: 32, color: T.dim, marginBottom: 10 }}>—</div>
+        <div style={{ color: T.textDim, fontSize: 14 }}>Ingen økter registrert ennå.</div>
+      </Card>
     </div>
   );
 
@@ -871,104 +992,124 @@ function HistoryView({ sessions, setSessions }) {
 
   return (
     <div className="fade-in">
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        {[["SESSIONS", sessions.length], ["DATA PTS", totalEntries], ["LAST", fmt(sessions[0].date, true)]].map(([l, v]) => (
-          <div key={l} style={{ flex: 1, background: t.surface, borderRadius: 10, padding: "10px 10px 8px", border: `1px solid ${t.border}` }}>
-            <div style={{ fontSize: 8, letterSpacing: 2, color: t.muted, fontFamily: "'JetBrains Mono',monospace", marginBottom: 4 }}>{l}</div>
-            <div style={{ fontSize: 17, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: t.text }}>{v}</div>
-          </div>
-        ))}
-        <button onClick={() => exportCSV(sessions)}
-          style={{ padding: "8px 12px", background: t.surface, border: `1px solid ${t.border}`,
-            borderRadius: 10, color: "#00FF87", fontSize: 10, fontFamily: "'JetBrains Mono',monospace",
-            letterSpacing: 1, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2 }}>
-          <span style={{ fontSize: 18, lineHeight: 1 }}>↓</span><span>CSV</span>
-        </button>
-      </div>
+      <SectionTitle
+        sub={`${sessions.length} økter · ${totalEntries} målinger · siste ${fmt(sessions[0].date, true)}`}
+        right={
+          <button onClick={() => exportCSV(sessions)}
+            style={{
+              padding: "8px 14px", background: T.surface,
+              border: `1px solid ${T.border}`, borderRadius: 10,
+              color: T.sage700, fontSize: 13, fontFamily: "inherit",
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+            }}>
+            <span style={{ fontSize: 15 }}>↓</span> Eksporter CSV
+          </button>
+        }>Historikk</SectionTitle>
 
-      <LactateTrend sessions={sessions} />
+      <div style={{ marginBottom: 20 }}>
+        <LactateTrend sessions={sessions} />
+      </div>
 
       {sessions.map(session => {
         const open = expandedId === session.id;
         const avgLac = session.entries.reduce((s, e) => s + e.lactate, 0) / session.entries.length;
         const z = zone(avgLac);
         const confirmDel = delConfirm === session.id;
+        const types = [...new Set(session.entries.map(e => e.intervalType))];
         return (
-          <div key={session.id} style={{ background: t.surface, borderRadius: 14, marginBottom: 10, border: `1px solid ${t.border}`, overflow: "hidden" }}>
-            <div style={{ padding: "13px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
+          <Card key={session.id} padded={false} style={{ marginBottom: 12, overflow: "hidden" }}>
+            <div style={{ padding: "16px 20px", cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 14 }}
               onClick={() => setExpandedId(open ? null : session.id)}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontFamily: "'JetBrains Mono',monospace", color: t.text, fontWeight: 600, marginBottom: 5 }}>{fmt(session.date)}</div>
-                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
-                  {[...new Set(session.entries.map(e => e.intervalType))].map(it => (
-                    <span key={it} style={{ fontSize: 10, fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 700, letterSpacing: 1,
-                      padding: "2px 7px", borderRadius: 5, background: INTERVAL_COLORS[it] + "22",
-                      color: INTERVAL_COLORS[it], border: `1px solid ${INTERVAL_COLORS[it]}44` }}>{it}</span>
-                  ))}
-                  <span style={{ fontSize: 10, color: t.muted, fontFamily: "'JetBrains Mono',monospace" }}>
-                    {session.entries.length} {session.entries.length === 1 ? "entry" : "entries"}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontFamily: "'Fraunces', Georgia, serif",
+                  fontWeight: 500, color: T.text, marginBottom: 6 }}>
+                  {fmt(session.date)}
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                  {types.map(it => <Pill key={it} color={INTERVAL_COLORS[it]}>{it}</Pill>)}
+                  <span style={{ fontSize: 12, color: T.muted }}>
+                    {session.entries.length} {session.entries.length === 1 ? "måling" : "målinger"}
                   </span>
                 </div>
               </div>
-              <div style={{ textAlign: "right", marginRight: 6 }}>
-                <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: z.color, lineHeight: 1 }}>{avgLac.toFixed(1)}</div>
-                <div style={{ fontSize: 9, color: t.muted, fontFamily: "'JetBrains Mono',monospace" }}>avg mmol/L</div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 26, fontFamily: "'Fraunces', Georgia, serif",
+                  fontWeight: 500, color: z.color, lineHeight: 1,
+                  fontVariantNumeric: "tabular-nums" }}>{avgLac.toFixed(1)}</div>
+                <div style={{ fontSize: 10, color: T.muted, letterSpacing: 1,
+                  textTransform: "uppercase" }}>snitt mmol/L</div>
               </div>
-              <span style={{ color: t.muted, fontSize: 11 }}>{open ? "▲" : "▼"}</span>
+              <span style={{ color: T.muted, fontSize: 12 }}>{open ? "▲" : "▼"}</span>
             </div>
 
             {open && (
-              <div className="fade-in" style={{ borderTop: `1px solid ${t.border}` }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 60px 36px 56px 80px", padding: "6px 14px", background: t.bg }}>
-                  {["PACE","BPM","LA","TYPE","RPE","FAT.",""].map(h => (
-                    <div key={h} style={{ fontSize: 8, letterSpacing: 1.5, color: t.muted, fontFamily: "'JetBrains Mono',monospace", textAlign: "center" }}>{h}</div>
-                  ))}
+              <div className="fade-in" style={{ borderTop: `1px solid ${T.border}`, background: T.bg }}>
+                <div className="entry-row entry-head" style={{ background: T.bg2 }}>
+                  <div>Fart</div>
+                  <div>Puls</div>
+                  <div>Laktat</div>
+                  <div>Type</div>
+                  <div>Fatigue</div>
+                  <div></div>
                 </div>
                 {session.entries.map((e, i) => {
                   const ez = zone(e.lactate);
                   return (
-                    <div key={e.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 60px 36px 56px 80px",
-                      padding: "9px 14px", alignItems: "center", borderTop: `1px solid ${t.border}`,
-                      background: i % 2 === 0 ? t.surface : t.bg }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: "#00CFFF", textAlign: "center" }}>{e.speed}</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: "#FF2D55", textAlign: "center" }}>{e.pulse}</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: ez.color, textAlign: "center" }}>{e.lactate}</span>
-                      <span style={{ fontSize: 11, fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 700, color: INTERVAL_COLORS[e.intervalType], textAlign: "center" }}>{e.intervalType}</span>
-                      <span style={{ fontSize: 12, fontFamily: "'JetBrains Mono',monospace", color: "#FFD600", textAlign: "center" }}>{e.borg}</span>
-                      <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono',monospace", color: fdColor(e.fatigueDelta), textAlign: "center" }}>
-                        {e.fatigueDelta != null ? (e.fatigueDelta >= 0 ? `+${e.fatigueDelta.toFixed(1)}` : e.fatigueDelta.toFixed(1)) : "—"}
+                    <div key={e.id} className="entry-row"
+                      style={{ borderTop: `1px solid ${T.border}`,
+                        background: i % 2 === 0 ? T.surface : T.bg }}>
+                      <span className="num" style={{ color: T.pace }}>{e.speed}</span>
+                      <span className="num" style={{ color: T.pulse }}>{e.pulse}</span>
+                      <span className="num" style={{ color: ez.color }}>{e.lactate}</span>
+                      <span style={{ fontSize: 12, fontWeight: 500,
+                        color: INTERVAL_COLORS[e.intervalType] }}>{e.intervalType}</span>
+                      <span className="num" style={{ color: fdColor(e.fatigueDelta) }}>
+                        {e.fatigueDelta != null
+                          ? (e.fatigueDelta >= 0 ? `+${e.fatigueDelta.toFixed(1)}` : e.fatigueDelta.toFixed(1))
+                          : "—"}
                       </span>
-                      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                         <button onClick={() => setEditTarget({ sessionId: session.id, entryId: e.id })}
-                          style={{ background: "transparent", border: `1px solid ${t.border}`, color: t.muted,
-                            borderRadius: 6, padding: "3px 7px", fontSize: 10, fontFamily: "'JetBrains Mono',monospace", cursor: "pointer" }}>Edit</button>
+                          style={{ background: "transparent", border: `1px solid ${T.border}`,
+                            color: T.textDim, borderRadius: 8, padding: "3px 10px",
+                            fontSize: 11, fontFamily: "inherit", cursor: "pointer" }}>Endre</button>
                         <button onClick={() => deleteEntry(session.id, e.id)}
-                          style={{ background: "transparent", border: "1px solid #FF2D5533", color: "#FF2D55",
-                            borderRadius: 6, padding: "3px 6px", fontSize: 10, fontFamily: "'JetBrains Mono',monospace", cursor: "pointer" }}>✕</button>
+                          style={{ background: "transparent", border: `1px solid ${T.danger}33`,
+                            color: T.danger, borderRadius: 8, padding: "3px 8px",
+                            fontSize: 11, cursor: "pointer" }}>✕</button>
                       </div>
                     </div>
                   );
                 })}
-                <div style={{ padding: "10px 14px", display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, background: t.bg, borderTop: `1px solid ${t.border}` }}>
+                <div style={{ padding: "12px 20px", display: "flex", justifyContent: "flex-end",
+                  alignItems: "center", gap: 10, background: T.bg2, borderTop: `1px solid ${T.border}` }}>
                   {confirmDel ? (
                     <>
-                      <span style={{ fontSize: 11, color: t.muted, fontFamily: "'JetBrains Mono',monospace", marginRight: 4 }}>Delete entire session?</span>
+                      <span style={{ fontSize: 12, color: T.textDim, marginRight: 4 }}>
+                        Slette hele økten?
+                      </span>
                       <button onClick={() => setDelConfirm(null)}
-                        style={{ background: "transparent", border: `1px solid ${t.border}`, color: t.muted, borderRadius: 8, padding: "5px 12px", fontSize: 11, fontFamily: "'JetBrains Mono',monospace", cursor: "pointer" }}>Cancel</button>
+                        style={{ background: "transparent", border: `1px solid ${T.border}`,
+                          color: T.textDim, borderRadius: 8, padding: "6px 14px",
+                          fontSize: 12, fontFamily: "inherit", cursor: "pointer" }}>Avbryt</button>
                       <button onClick={() => deleteSession(session.id)}
-                        style={{ background: "#FF2D55", border: "none", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 11, fontFamily: "'JetBrains Mono',monospace", cursor: "pointer", fontWeight: 700 }}>Confirm</button>
+                        style={{ background: T.danger, border: "none", color: "#fff",
+                          borderRadius: 8, padding: "6px 14px", fontSize: 12,
+                          fontFamily: "inherit", cursor: "pointer", fontWeight: 600 }}>Bekreft</button>
                     </>
                   ) : (
                     <button onClick={() => setDelConfirm(session.id)}
-                      style={{ background: "transparent", border: "1px solid #FF2D5533", color: "#FF2D55", borderRadius: 8,
-                        padding: "5px 14px", fontSize: 12, fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 700, letterSpacing: 1, cursor: "pointer" }}>
-                      Delete session
+                      style={{ background: "transparent", border: `1px solid ${T.danger}44`,
+                        color: T.danger, borderRadius: 8, padding: "6px 14px",
+                        fontSize: 12, fontFamily: "inherit", cursor: "pointer" }}>
+                      Slett økt
                     </button>
                   )}
                 </div>
               </div>
             )}
-          </div>
+          </Card>
         );
       })}
 
@@ -976,7 +1117,9 @@ function HistoryView({ sessions, setSessions }) {
         const s = sessions.find(s => s.id === editTarget.sessionId);
         const e = s?.entries.find(e => e.id === editTarget.entryId);
         return e ? (
-          <EditModal entry={e} onSave={data => updateEntry(editTarget.sessionId, editTarget.entryId, data)} onClose={() => setEditTarget(null)} />
+          <EditModal entry={e}
+            onSave={data => updateEntry(editTarget.sessionId, editTarget.entryId, data)}
+            onClose={() => setEditTarget(null)} />
         ) : null;
       })()}
     </div>
@@ -987,66 +1130,202 @@ function HistoryView({ sessions, setSessions }) {
 // ZONES VIEW
 // ═══════════════════════════════════════════════════════════════════
 function ZonesView({ sessions }) {
-  const t = useT();
   const totalEntries = sessions.reduce((n, s) => n + s.entries.length, 0);
   const model = useMemo(() => buildModel(sessions), [sessions]);
   const drift = useMemo(() => computeThresholdDrift(sessions), [sessions]);
 
   return (
     <div className="fade-in">
-      <SectionLabel style={{ marginTop: 0 }}>THRESHOLD ZONE PREDICTION</SectionLabel>
+      <SectionTitle sub="Din beregnede terskel fordelt på intervalltype">
+        Soner & terskel
+      </SectionTitle>
+
       {totalEntries < 3 ? (
-        <div style={{ textAlign: "center", padding: "50px 20px" }}>
-          <div style={{ fontSize: 64, fontWeight: 900, fontFamily: "'JetBrains Mono',monospace", color: t.border, marginBottom: 8 }}>{totalEntries}/3</div>
-          <div style={{ color: t.muted, fontSize: 13, fontFamily: "'JetBrains Mono',monospace" }}>data points needed</div>
-        </div>
+        <Card style={{ textAlign: "center", padding: 60 }}>
+          <div style={{ fontSize: 48, fontFamily: "'Fraunces', Georgia, serif",
+            fontWeight: 500, color: T.sage300, marginBottom: 10,
+            fontVariantNumeric: "tabular-nums" }}>{totalEntries}/3</div>
+          <div style={{ color: T.textDim, fontSize: 14 }}>
+            Datapunkter trengs før vi kan regne ut terskel.
+          </div>
+        </Card>
       ) : !model ? (
-        <div style={{ textAlign: "center", padding: "40px 20px", color: t.muted, fontFamily: "'JetBrains Mono',monospace", fontSize: 13 }}>
-          Insufficient variance. Log entries across varying paces and intensities.
-        </div>
+        <Card style={{ textAlign: "center", padding: 40 }}>
+          <div style={{ color: T.textDim, fontSize: 14 }}>
+            For lite variasjon i dataene. Logg målinger på ulike farter.
+          </div>
+        </Card>
       ) : (
         <>
-          <div style={{ background: t.surface, borderRadius: 12, padding: 14, border: `1px solid ${t.border}`, marginBottom: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 8 }}>
-              <span style={{ color: t.muted }}>Model confidence</span>
-              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700,
-                color: model.r2 > .7 ? "#00FF87" : model.r2 > .4 ? "#FFD600" : "#FF6B35" }}>
-                {model.r2 > .7 ? "High" : model.r2 > .4 ? "Medium" : "Low"} · R²={model.r2.toFixed(2)}
+          {/* Confidence bar */}
+          <Card style={{ marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between",
+              fontSize: 13, marginBottom: 10 }}>
+              <span style={{ color: T.textDim }}>Modellens pålitelighet</span>
+              <span style={{ fontWeight: 600,
+                color: model.r2 > .7 ? T.ok : model.r2 > .4 ? T.warn : T.danger }}>
+                {model.r2 > .7 ? "Høy" : model.r2 > .4 ? "Middels" : "Lav"} · R²={model.r2.toFixed(2)}
               </span>
             </div>
-            <div style={{ height: 4, background: t.border, borderRadius: 4, overflow: "hidden" }}>
+            <div style={{ height: 6, background: T.bg2, borderRadius: 4, overflow: "hidden" }}>
               <div style={{ height: "100%", borderRadius: 4, transition: "width .5s",
                 width: `${Math.min(100, model.r2 * 100)}%`,
-                background: model.r2 > .7 ? "#00FF87" : model.r2 > .4 ? "#FFD600" : "#FF6B35" }} />
+                background: model.r2 > .7 ? T.ok : model.r2 > .4 ? T.warn : T.danger }} />
             </div>
-            <div style={{ color: t.muted, fontSize: 10, fontFamily: "'JetBrains Mono',monospace", marginTop: 5 }}>
-              Based on {model.n} entries across {sessions.length} sessions
+            <div style={{ color: T.muted, fontSize: 12, marginTop: 8 }}>
+              Basert på {model.n} målinger på tvers av {sessions.length} økter
             </div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <ZoneCard label="Long intervals · 8+ min" lactate="3.5 mmol/L target" color="#10B981"
+          </Card>
+
+          {/* Zone recommendations */}
+          <Eyebrow>Anbefalt tempo</Eyebrow>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
+            <ZoneCard label="Lange intervaller" sub="8+ min · 3.5 mmol/L" lactate="3.5 mmol/L"
+              color={T.sage600}
               pace={secToPace(model.perType.Long.paceAt(3.5))}
               pulse={model.perType.Long.pulseAt(3.5)} />
-            <ZoneCard label="Medium intervals · 4–8 min" lactate="3.5 mmol/L target" color="#D97706"
+            <ZoneCard label="Middels intervaller" sub="4–8 min · 3.5 mmol/L" lactate="3.5 mmol/L"
+              color="#C89B3C"
               pace={secToPace(model.perType.Medium.paceAt(3.5))}
               pulse={model.perType.Medium.pulseAt(3.5)} />
-            <ZoneCard label="45 / 15 intervals" lactate="3.5 mmol/L target" color="#F59E0B"
+            <ZoneCard label="45 / 15 intervaller" sub="Kort-serie · 3.5 mmol/L" lactate="3.5 mmol/L"
+              color={T.clay}
               pace={secToPace(model.perType.Short.paceAt(3.5))}
               pulse={model.perType.Short.pulseAt(3.5)} />
-            <ZoneCard label="Short intervals · <3 min" lactate="4.5 mmol/L target" color="#EA580C"
+            <ZoneCard label="Korte intervaller" sub="< 3 min · 4.5 mmol/L" lactate="4.5 mmol/L"
+              color="#A85858"
               pace={secToPace(model.perType.Short.paceAt(4.5))}
               pulse={model.perType.Short.pulseAt(4.5)} />
           </div>
-          {drift.length >= 2 && <ThresholdDriftChart drift={drift} />}
-          <RacePrediction model={model} />
-          <SectionLabel>DATA POINTS — PACE vs LACTATE</SectionLabel>
+
+          {drift.length >= 2 && (
+            <div style={{ marginBottom: 28 }}>
+              <ThresholdDriftChart drift={drift} />
+            </div>
+          )}
+
+          <div style={{ marginBottom: 28 }}>
+            <RacePrediction model={model} />
+          </div>
+
           <LactateScatter sessions={sessions} model={model} />
-          <div style={{ marginTop: 14, color: t.muted, fontSize: 10, fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.7 }}>
-            Threshold zone = 2.5–3.5 mmol/L (Norwegian model). Drift chart requires data across 2+ calendar months.
+
+          <div style={{ marginTop: 18, fontSize: 12, color: T.muted, lineHeight: 1.7 }}>
+            Terskelsonen = 2.5–3.5 mmol/L (norsk modell). Drift-grafen krever data fra minst 2 kalendermåneder.
           </div>
         </>
       )}
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// APP SHELL — sidebar + main + mobile nav
+// ═══════════════════════════════════════════════════════════════════
+const NAV = [
+  { id: "log",     label: "Økt",        icon: "●" },
+  { id: "zones",   label: "Soner",      icon: "◎" },
+  { id: "history", label: "Historikk",  icon: "◇" },
+];
+
+function Sidebar({ view, setView, onSignOut, email }) {
+  return (
+    <aside className="sidebar">
+      <div style={{ padding: "28px 24px 20px" }}>
+        <h1 style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 500,
+          fontSize: 26, color: T.sage800, margin: 0, letterSpacing: "-0.02em" }}>
+          Terskel
+        </h1>
+        <div style={{ fontSize: 11, color: T.muted, letterSpacing: 1.5,
+          textTransform: "uppercase", marginTop: 4 }}>
+          Laktat · løping
+        </div>
+      </div>
+
+      <nav style={{ padding: "0 12px", flex: 1 }}>
+        {NAV.map(item => {
+          const active = view === item.id;
+          return (
+            <button key={item.id} onClick={() => setView(item.id)}
+              style={{
+                display: "flex", alignItems: "center", gap: 12, width: "100%",
+                padding: "11px 14px", marginBottom: 4,
+                background: active ? T.sage100 : "transparent",
+                color: active ? T.sage800 : T.textDim,
+                border: "none", borderRadius: 10,
+                fontSize: 14, fontWeight: active ? 600 : 500,
+                fontFamily: "inherit", cursor: "pointer",
+                textAlign: "left", transition: "all .15s",
+              }}>
+              <span style={{ fontSize: 14, color: active ? T.sage600 : T.muted }}>
+                {item.icon}
+              </span>
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div style={{ padding: 16, borderTop: `1px solid ${T.border}` }}>
+        {email && (
+          <div style={{ fontSize: 11, color: T.muted, marginBottom: 10,
+            wordBreak: "break-all" }}>{email}</div>
+        )}
+        <button onClick={onSignOut}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            width: "100%", padding: "9px 12px",
+            background: "transparent", border: `1px solid ${T.border}`,
+            borderRadius: 10, color: T.textDim, fontSize: 12,
+            fontFamily: "inherit", cursor: "pointer",
+          }}>
+          Logg ut
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+function MobileNav({ view, setView }) {
+  return (
+    <nav className="mobile-nav">
+      {NAV.map(item => {
+        const active = view === item.id;
+        return (
+          <button key={item.id} onClick={() => setView(item.id)}
+            style={{
+              flex: 1, display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center", gap: 3,
+              padding: "10px 4px 8px",
+              background: "transparent", border: "none",
+              color: active ? T.sage700 : T.muted,
+              cursor: "pointer", fontFamily: "inherit",
+            }}>
+            <span style={{ fontSize: 16, lineHeight: 1 }}>{item.icon}</span>
+            <span style={{ fontSize: 11, fontWeight: active ? 600 : 500 }}>{item.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function MobileHeader({ onSignOut }) {
+  return (
+    <header className="mobile-header">
+      <h1 style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 500,
+        fontSize: 20, color: T.sage800, margin: 0, letterSpacing: "-0.01em" }}>
+        Terskel
+      </h1>
+      <button onClick={onSignOut}
+        style={{
+          padding: "6px 12px", background: "transparent",
+          border: `1px solid ${T.border}`, borderRadius: 20,
+          color: T.textDim, fontSize: 12, fontFamily: "inherit", cursor: "pointer",
+        }}>
+        Logg ut
+      </button>
+    </header>
   );
 }
 
@@ -1056,10 +1335,8 @@ function ZonesView({ sessions }) {
 export default function LactateTracker() {
   const [sessions, setSessions] = useState([]);
   const [view, setView]         = useState("log");
-  const [isDark, setIsDark]     = useState(false);
   const [user, setUser]         = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const t = isDark ? DARK : LIGHT;
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -1075,95 +1352,148 @@ export default function LactateTracker() {
   useEffect(() => {
     if (!user) return;
     loadSessions().then(setSessions);
-  }, [user]);
+  }, [user?.id]);
 
   const css = `
-    @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body, #root { min-height: 100vh; min-height: 100dvh; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: ${T.bg};
+      color: ${T.text};
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    .num {
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: 'tnum';
+      font-family: 'Fraunces', Georgia, serif;
+      font-weight: 500;
+      font-size: 15px;
+    }
     .fade-in { animation: fadeIn .2s ease; }
     @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
-    @keyframes slideUp { from { transform:translateY(100%); } to { transform:translateY(0); } }
-    .metric-input::placeholder { color: ${t.dim}; }
+    @keyframes slideUp { from { transform:translateY(20px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+
+    .metric-input::placeholder { color: ${T.dim}; }
     .metric-input:focus { outline: none; }
-    .save-btn:active { transform: scale(.97); }
     input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
     input[type=number] { -moz-appearance: textfield; }
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: ${t.bg}; }
-    ::-webkit-scrollbar-thumb { background: ${t.border}; border-radius: 2px; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: ${T.bg}; }
+    ::-webkit-scrollbar-thumb { background: ${T.border}; border-radius: 3px; }
+    ::selection { background: ${T.sage200}; color: ${T.sage800}; }
+
+    /* Layout */
+    .app-shell { display: flex; min-height: 100vh; min-height: 100dvh; }
+    .sidebar {
+      width: 240px; flex-shrink: 0;
+      background: ${T.surface};
+      border-right: 1px solid ${T.border};
+      display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100vh; height: 100dvh;
+    }
+    .main {
+      flex: 1; min-width: 0;
+      padding: 40px 48px 60px;
+    }
+    .main-inner { max-width: 900px; margin: 0 auto; }
+    .mobile-nav, .mobile-header { display: none; }
+
+    /* Entry row — grid layout for staged + history tables */
+    .entry-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1.2fr 1fr 50px;
+      gap: 10px; align-items: center;
+      padding: 11px 20px;
+    }
+    .entry-row > * { text-align: center; font-size: 13px; }
+    .entry-row > *:last-child { text-align: right; }
+    .entry-head {
+      background: ${T.bg2};
+      font-size: 10px !important;
+      letterspacing: 1.5px;
+      text-transform: uppercase;
+      color: ${T.muted};
+      font-weight: 600;
+      padding-top: 9px; padding-bottom: 9px;
+    }
+    .entry-head > * { font-size: 10px !important; letter-spacing: 1.5px; }
+
+    /* Metric grid — 3 cols on desktop, 1 on mobile */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+
+    /* Mobile */
+    @media (max-width: 767px) {
+      .sidebar { display: none; }
+      .main { padding: 72px 16px 88px; }
+      .mobile-header {
+        display: flex; align-items: center; justify-content: space-between;
+        position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+        padding: 12px 16px;
+        background: rgba(250,250,247,0.92);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid ${T.border};
+      }
+      .mobile-nav {
+        display: flex; position: fixed; bottom: 0; left: 0; right: 0;
+        z-index: 50;
+        background: rgba(255,255,255,0.96);
+        backdrop-filter: blur(10px);
+        border-top: 1px solid ${T.border};
+        padding-bottom: env(safe-area-inset-bottom);
+      }
+      .metric-grid { grid-template-columns: 1fr; gap: 10px; }
+      .entry-row {
+        grid-template-columns: 1fr 1fr 1fr 40px;
+        padding: 10px 14px;
+      }
+      .entry-row > *:nth-child(4),
+      .entry-row > *:nth-child(5) { display: none; }
+      .entry-row > *:nth-child(6) { display: block; grid-column: 4; }
+    }
   `;
 
   if (authLoading) return (
-    <div style={{ minHeight: "100vh", background: DARK.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ color: "#00FF87", fontFamily: "'JetBrains Mono',monospace", fontSize: 13, letterSpacing: 2 }}>LOADING...</div>
+    <div style={{ minHeight: "100dvh", background: T.bg,
+      display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ color: T.sage600, fontSize: 14, letterSpacing: 1 }}>
+        Laster…
+      </div>
     </div>
   );
 
+  if (!user) return (
+    <Ctx.Provider value={T}>
+      <style>{css}</style>
+      <LoginScreen />
+    </Ctx.Provider>
+  );
+
   return (
-    <Ctx.Provider value={t}>
-      <div style={{ minHeight: "100vh", background: t.bg, color: t.text,
-        fontFamily: "'Barlow Condensed',sans-serif", maxWidth: 440, margin: "0 auto" }}>
-        <style>{css}</style>
+    <Ctx.Provider value={T}>
+      <style>{css}</style>
+      <div className="app-shell">
+        <Sidebar view={view} setView={setView}
+          onSignOut={() => supabase.auth.signOut()} email={user.email} />
 
-        {!user ? (
-          <LoginScreen />
-        ) : (
-          <>
-            <div style={{ padding: "18px 20px 0", borderBottom: `1px solid ${t.border}` }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-                <div>
-                  <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: 2, lineHeight: 1 }}>
-                    <span style={{ color: "#00FF87", fontFamily: "'JetBrains Mono',monospace" }}>LA</span>
-                    <span style={{ color: t.text }}>TRACKER</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: t.muted, letterSpacing: 2, marginTop: 4, fontFamily: "'JetBrains Mono',monospace" }}>
-                    Lactate · Running · Performance
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 2 }}>
-                  <button onClick={() => setIsDark(d => !d)}
-                    style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: 20,
-                      padding: "6px 12px", cursor: "pointer", fontSize: 15, color: t.text }}>
-                    {isDark ? "☀️" : "🌙"}
-                  </button>
-                  <button onClick={() => supabase.auth.signOut()}
-                    style={{ background: "transparent", border: `1px solid ${t.border}`, borderRadius: 20,
-                      padding: "6px 12px", cursor: "pointer", fontSize: 10,
-                      color: t.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>
-                    OUT
-                  </button>
-                </div>
-              </div>
+        <MobileHeader onSignOut={() => supabase.auth.signOut()} />
 
-              <div style={{ display: "flex", gap: 5, paddingBottom: 14 }}>
-                {[["log","Log"], ["history","History"], ["zones","Zones"]].map(([v, l]) => (
-                  <button key={v} onClick={() => setView(v)}
-                    style={{ background: view === v ? "#00FF87" : t.surface,
-                      border: `1px solid ${view === v ? "#00FF87" : t.border}`,
-                      borderRadius: 20, color: view === v ? "#0A0A0F" : t.muted,
-                      padding: "5px 14px", fontFamily: "'Barlow Condensed',sans-serif",
-                      fontSize: 13, fontWeight: 700, letterSpacing: 1, cursor: "pointer",
-                      display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>
-                    {l}
-                    {v === "history" && sessions.length > 0 && (
-                      <span style={{ background: view === "history" ? "#0A0A0F" : t.surface,
-                        color: "#00FF87", borderRadius: 10, padding: "0 5px",
-                        fontSize: 10, fontFamily: "'JetBrains Mono',monospace" }}>
-                        {sessions.length}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
+        <main className="main">
+          <div className="main-inner">
+            {view === "log"     && <LogView     sessions={sessions} setSessions={setSessions} />}
+            {view === "history" && <HistoryView sessions={sessions} setSessions={setSessions} />}
+            {view === "zones"   && <ZonesView   sessions={sessions} />}
+          </div>
+        </main>
 
-            <div style={{ padding: "20px" }}>
-              {view === "log"     && <LogView     sessions={sessions} setSessions={setSessions} />}
-              {view === "history" && <HistoryView sessions={sessions} setSessions={setSessions} />}
-              {view === "zones"   && <ZonesView   sessions={sessions} />}
-            </div>
-          </>
-        )}
+        <MobileNav view={view} setView={setView} />
       </div>
     </Ctx.Provider>
   );
