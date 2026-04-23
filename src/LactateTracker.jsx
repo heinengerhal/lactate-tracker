@@ -70,7 +70,7 @@ const INTERVAL_COLORS = {
   Medium: "#C89B3C",  // amber
   Long:   "#5C8C68",  // sage
 };
-const BLANK_ENTRY = { speed: "", pulse: "", lactate: "", intervalType: "Medium" };
+const BLANK_ENTRY = { speed: "", pulse: "", lactate: "", intervalType: "Medium", note: "" };
 
 // ═══════════════════════════════════════════════════════════════════
 // UTILITIES
@@ -139,11 +139,16 @@ const persistSessions = async (sessions) => {
 };
 
 const exportCSV = (sessions) => {
-  const hdr = ["Dato","Fart (min/km)","Puls (bpm)","Laktat (mmol/L)","Sone","Intervalltype","Fatigue Δ (mmol/L)"];
+  const hdr = ["Dato","Fart (min/km)","Puls (bpm)","Laktat (mmol/L)","Sone","Intervalltype","Fatigue Δ (mmol/L)","Notat"];
+  const esc = (v) => {
+    const s = String(v ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
   const rows = [hdr, ...sessions.flatMap(s =>
     s.entries.map(e => [fmt(s.date), e.speed, e.pulse, e.lactate,
       zone(e.lactate).label, e.intervalType,
-      e.fatigueDelta != null ? e.fatigueDelta.toFixed(2) : ""])
+      e.fatigueDelta != null ? e.fatigueDelta.toFixed(2) : "",
+      e.note || ""].map(esc))
   )];
   const a = Object.assign(document.createElement("a"), {
     href: URL.createObjectURL(new Blob([rows.map(r => r.join(",")).join("\n")], { type: "text/csv" })),
@@ -587,6 +592,27 @@ function EntryForm({ initial, onSubmit, submitLabel, onCancel, onFormChange }) {
         })}
       </div>
 
+      <Eyebrow style={{ marginTop: 22 }}>Notat (valgfritt)</Eyebrow>
+      <textarea
+        value={form.note || ""}
+        onChange={e => update({ note: e.target.value })}
+        placeholder="Vind, underlag, følelse, drakt…"
+        rows={2}
+        style={{
+          width: "100%",
+          padding: "10px 14px",
+          borderRadius: 12,
+          border: `1px solid ${T.border}`,
+          background: T.surface,
+          color: T.text,
+          fontSize: 14,
+          fontFamily: "inherit",
+          resize: "vertical",
+          minHeight: 60,
+          outline: "none",
+        }}
+      />
+
       <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
         {onCancel && (
           <button onClick={onCancel}
@@ -914,21 +940,31 @@ function LogView({ sessions, setSessions }) {
             {staged.map((e, i) => {
               const z = zone(e.lactate);
               return (
-                <div key={e.id} className="entry-row"
-                  style={{ borderTop: i > 0 ? `1px solid ${T.border}` : "none" }}>
-                  <span className="num" style={{ color: T.pace }}>{e.speed}</span>
-                  <span className="num" style={{ color: T.pulse }}>{e.pulse}</span>
-                  <span className="num" style={{ color: z.color }}>{e.lactate}</span>
-                  <span style={{ fontSize: 12, fontWeight: 500,
-                    color: INTERVAL_COLORS[e.intervalType] }}>{e.intervalType}</span>
-                  <span className="num" style={{ color: fdColor(e.fatigueDelta) }}>
-                    {e.fatigueDelta != null
-                      ? (e.fatigueDelta >= 0 ? `+${e.fatigueDelta.toFixed(1)}` : e.fatigueDelta.toFixed(1))
-                      : "—"}
-                  </span>
-                  <button onClick={() => setStaged(prev => prev.filter(x => x.id !== e.id))}
-                    style={{ background: "transparent", border: "none", color: T.muted,
-                      fontSize: 15, cursor: "pointer" }}>✕</button>
+                <div key={e.id} style={{ borderTop: i > 0 ? `1px solid ${T.border}` : "none" }}>
+                  <div className="entry-row">
+                    <span className="num" style={{ color: T.pace }}>{e.speed}</span>
+                    <span className="num" style={{ color: T.pulse }}>{e.pulse}</span>
+                    <span className="num" style={{ color: z.color }}>{e.lactate}</span>
+                    <span style={{ fontSize: 12, fontWeight: 500,
+                      color: INTERVAL_COLORS[e.intervalType] }}>{e.intervalType}</span>
+                    <span className="num" style={{ color: fdColor(e.fatigueDelta) }}>
+                      {e.fatigueDelta != null
+                        ? (e.fatigueDelta >= 0 ? `+${e.fatigueDelta.toFixed(1)}` : e.fatigueDelta.toFixed(1))
+                        : "—"}
+                    </span>
+                    <button onClick={() => setStaged(prev => prev.filter(x => x.id !== e.id))}
+                      style={{ background: "transparent", border: "none", color: T.muted,
+                        fontSize: 15, cursor: "pointer" }}>✕</button>
+                  </div>
+                  {e.note && (
+                    <div style={{
+                      padding: "0 20px 10px",
+                      fontSize: 12, color: T.textDim, fontStyle: "italic",
+                      lineHeight: 1.5, marginTop: -4,
+                    }}>
+                      “{e.note}”
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1055,30 +1091,40 @@ function HistoryView({ sessions, setSessions }) {
                 </div>
                 {session.entries.map((e, i) => {
                   const ez = zone(e.lactate);
+                  const rowBg = i % 2 === 0 ? T.surface : T.bg;
                   return (
-                    <div key={e.id} className="entry-row"
-                      style={{ borderTop: `1px solid ${T.border}`,
-                        background: i % 2 === 0 ? T.surface : T.bg }}>
-                      <span className="num" style={{ color: T.pace }}>{e.speed}</span>
-                      <span className="num" style={{ color: T.pulse }}>{e.pulse}</span>
-                      <span className="num" style={{ color: ez.color }}>{e.lactate}</span>
-                      <span style={{ fontSize: 12, fontWeight: 500,
-                        color: INTERVAL_COLORS[e.intervalType] }}>{e.intervalType}</span>
-                      <span className="num" style={{ color: fdColor(e.fatigueDelta) }}>
-                        {e.fatigueDelta != null
-                          ? (e.fatigueDelta >= 0 ? `+${e.fatigueDelta.toFixed(1)}` : e.fatigueDelta.toFixed(1))
-                          : "—"}
-                      </span>
-                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                        <button onClick={() => setEditTarget({ sessionId: session.id, entryId: e.id })}
-                          style={{ background: "transparent", border: `1px solid ${T.border}`,
-                            color: T.textDim, borderRadius: 8, padding: "3px 10px",
-                            fontSize: 11, fontFamily: "inherit", cursor: "pointer" }}>Endre</button>
-                        <button onClick={() => deleteEntry(session.id, e.id)}
-                          style={{ background: "transparent", border: `1px solid ${T.danger}33`,
-                            color: T.danger, borderRadius: 8, padding: "3px 8px",
-                            fontSize: 11, cursor: "pointer" }}>✕</button>
+                    <div key={e.id} style={{ borderTop: `1px solid ${T.border}`, background: rowBg }}>
+                      <div className="entry-row">
+                        <span className="num" style={{ color: T.pace }}>{e.speed}</span>
+                        <span className="num" style={{ color: T.pulse }}>{e.pulse}</span>
+                        <span className="num" style={{ color: ez.color }}>{e.lactate}</span>
+                        <span style={{ fontSize: 12, fontWeight: 500,
+                          color: INTERVAL_COLORS[e.intervalType] }}>{e.intervalType}</span>
+                        <span className="num" style={{ color: fdColor(e.fatigueDelta) }}>
+                          {e.fatigueDelta != null
+                            ? (e.fatigueDelta >= 0 ? `+${e.fatigueDelta.toFixed(1)}` : e.fatigueDelta.toFixed(1))
+                            : "—"}
+                        </span>
+                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                          <button onClick={() => setEditTarget({ sessionId: session.id, entryId: e.id })}
+                            style={{ background: "transparent", border: `1px solid ${T.border}`,
+                              color: T.textDim, borderRadius: 8, padding: "3px 10px",
+                              fontSize: 11, fontFamily: "inherit", cursor: "pointer" }}>Endre</button>
+                          <button onClick={() => deleteEntry(session.id, e.id)}
+                            style={{ background: "transparent", border: `1px solid ${T.danger}33`,
+                              color: T.danger, borderRadius: 8, padding: "3px 8px",
+                              fontSize: 11, cursor: "pointer" }}>✕</button>
+                        </div>
                       </div>
+                      {e.note && (
+                        <div style={{
+                          padding: "0 20px 10px",
+                          fontSize: 12, color: T.textDim, fontStyle: "italic",
+                          lineHeight: 1.5, marginTop: -4,
+                        }}>
+                          “{e.note}”
+                        </div>
+                      )}
                     </div>
                   );
                 })}
