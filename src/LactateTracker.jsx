@@ -1177,26 +1177,37 @@ function ZonesView({ sessions }) {
             </div>
           </Card>
 
-          {/* Zone recommendations */}
-          <Eyebrow>Anbefalt tempo</Eyebrow>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
-            <ZoneCard label="Lange intervaller" sub="8+ min · 3.5 mmol/L" lactate="3.5 mmol/L"
-              color={T.sage600}
-              pace={secToPace(model.perType.Long.paceAt(3.5))}
-              pulse={model.perType.Long.pulseAt(3.5)} />
-            <ZoneCard label="Middels intervaller" sub="4–8 min · 3.5 mmol/L" lactate="3.5 mmol/L"
-              color="#C89B3C"
-              pace={secToPace(model.perType.Medium.paceAt(3.5))}
-              pulse={model.perType.Medium.pulseAt(3.5)} />
-            <ZoneCard label="45 / 15 intervaller" sub="Kort-serie · 3.5 mmol/L" lactate="3.5 mmol/L"
-              color={T.clay}
-              pace={secToPace(model.perType.Short.paceAt(3.5))}
-              pulse={model.perType.Short.pulseAt(3.5)} />
-            <ZoneCard label="Korte intervaller" sub="< 3 min · 4.5 mmol/L" lactate="4.5 mmol/L"
-              color="#A85858"
-              pace={secToPace(model.perType.Short.paceAt(4.5))}
-              pulse={model.perType.Short.pulseAt(4.5)} />
-          </div>
+          {/* Zone recommendations.
+              Medium clamped so it never becomes slower (higher sec/km) than Long. */}
+          {(() => {
+            const longPaceSec = model.perType.Long.paceAt(3.5);
+            let medPaceSec   = model.perType.Medium.paceAt(3.5);
+            let medPulse     = model.perType.Medium.pulseAt(3.5);
+            if (longPaceSec > 0 && medPaceSec > longPaceSec) {
+              medPaceSec = longPaceSec;
+              const longPulse = model.perType.Long.pulseAt(3.5);
+              if (longPulse != null && (medPulse == null || medPulse < longPulse)) medPulse = longPulse;
+            }
+            return (
+              <>
+                <Eyebrow>Anbefalt tempo</Eyebrow>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
+                  <ZoneCard label="Lange intervaller" sub="8+ min · 3.5 mmol/L" lactate="3.5 mmol/L"
+                    color={T.sage600}
+                    pace={secToPace(longPaceSec)}
+                    pulse={model.perType.Long.pulseAt(3.5)} />
+                  <ZoneCard label="Middels intervaller" sub="4–8 min · 3.5 mmol/L" lactate="3.5 mmol/L"
+                    color="#C89B3C"
+                    pace={secToPace(medPaceSec)}
+                    pulse={medPulse} />
+                  <ZoneCard label="Korte intervaller" sub="< 3 min · 4.5 mmol/L" lactate="4.5 mmol/L"
+                    color="#A85858"
+                    pace={secToPace(model.perType.Short.paceAt(4.5))}
+                    pulse={model.perType.Short.pulseAt(4.5)} />
+                </div>
+              </>
+            );
+          })()}
 
           {drift.length >= 2 && (
             <div style={{ marginBottom: 28 }}>
