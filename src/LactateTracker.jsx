@@ -190,7 +190,7 @@ function linRegWeighted(xs, ys, ws) {
   return { slope, intercept, r2: ssTot !== 0 ? Math.max(0, 1 - ssRes / ssTot) : 0, n };
 }
 
-const HALFLIFE_MS = 60 * 24 * 60 * 60 * 1000;
+const HALFLIFE_MS = 30 * 24 * 60 * 60 * 1000;
 const ageWeight = (dateIso, now) => Math.pow(0.5, (now - new Date(dateIso).getTime()) / HALFLIFE_MS);
 
 const buildModelFor = (entries, now = Date.now()) => {
@@ -216,14 +216,28 @@ const buildModel = (sessions) => {
   const base = buildModelFor(all, now);
   if (!base) return null;
   const perType = {};
+  const meta = {};
   for (const type of ["Short", "Medium", "Long"]) {
-    perType[type] = buildModelFor(all.filter(e => e.intervalType === type), now) || base;
+    const typeEntries = all.filter(e => e.intervalType === type);
+    const typeValid = typeEntries.filter(e =>
+      e.lactate >= 1.5 && e.lactate <= 6.5 && paceToSec(e.speed) !== null && e.pulse > 60);
+    const typeModel = buildModelFor(typeEntries, now);
+    perType[type] = typeModel || base;
+    const latest = typeValid.length
+      ? typeValid.reduce((a, b) => new Date(a.date) > new Date(b.date) ? a : b)
+      : null;
+    meta[type] = {
+      nValid:    typeValid.length,
+      nTotal:    typeEntries.length,
+      fallback:  !typeModel,
+      latestDate: latest?.date ?? null,
+    };
   }
   return {
     lo: base.paceAt(2.5), hi: base.paceAt(3.5),
     loP: base.pulseAt(2.5), hiP: base.pulseAt(3.5),
     r2: base.r2, n: base.n, slope: base.slope, intercept: base.intercept,
-    perType,
+    perType, meta,
   };
 };
 
@@ -371,7 +385,7 @@ function MetricInput({ label, unit, value, onChange, onBlur, placeholder, type, 
   );
 }
 
-function ZoneCard({ label, sub, lactate, color, pace, pulse }) {
+function ZoneCard({ label, sub, lactate, color, pace, pulse, meta }) {
   return (
     <Card padded={false} style={{ overflow: "hidden", display: "flex", alignItems: "stretch" }}>
       <div style={{ width: 4, background: color, flexShrink: 0 }} />
@@ -383,6 +397,14 @@ function ZoneCard({ label, sub, lactate, color, pace, pulse }) {
           <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
             {sub} · mål {lactate}
           </div>
+          {meta && (
+            <div style={{ fontSize: 11, marginTop: 4,
+              color: meta.fallback ? T.warn : T.muted }}>
+              {meta.fallback
+                ? `Felles modell — for få ${meta.typeLabel}-målinger (${meta.nValid})`
+                : `${meta.nValid} ${meta.typeLabel}-målinger${meta.latestDate ? ` · sist ${fmt(meta.latestDate, true)}` : ""}`}
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", gap: 22 }}>
           <div style={{ textAlign: "right" }}>
@@ -1241,15 +1263,18 @@ function ZonesView({ sessions }) {
                   <ZoneCard label="Lange intervaller" sub="8+ min · 3.5 mmol/L" lactate="3.5 mmol/L"
                     color={T.sage600}
                     pace={secToPace(longPaceSec)}
-                    pulse={model.perType.Long.pulseAt(3.5)} />
+                    pulse={model.perType.Long.pulseAt(3.5)}
+                    meta={{ ...model.meta.Long, typeLabel: "Long" }} />
                   <ZoneCard label="Middels intervaller" sub="4–8 min · 3.5 mmol/L" lactate="3.5 mmol/L"
                     color="#C89B3C"
                     pace={secToPace(medPaceSec)}
-                    pulse={medPulse} />
+                    pulse={medPulse}
+                    meta={{ ...model.meta.Medium, typeLabel: "Medium" }} />
                   <ZoneCard label="Korte intervaller" sub="< 3 min · 4.5 mmol/L" lactate="4.5 mmol/L"
                     color="#A85858"
                     pace={secToPace(model.perType.Short.paceAt(4.5))}
-                    pulse={model.perType.Short.pulseAt(4.5)} />
+                    pulse={model.perType.Short.pulseAt(4.5)}
+                    meta={{ ...model.meta.Short, typeLabel: "Short" }} />
                 </div>
               </>
             );
@@ -1554,4 +1579,4 @@ export default function LactateTracker() {
       </div>
     </Ctx.Provider>
   );
-}  
+}
