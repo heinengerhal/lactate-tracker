@@ -73,6 +73,25 @@ const INTERVAL_COLORS = {
 const BLANK_ENTRY = { speed: "", pulse: "", lactate: "", intervalType: "Medium", note: "" };
 
 // ═══════════════════════════════════════════════════════════════════
+// PERSONAL SETTINGS (stored in localStorage)
+// ═══════════════════════════════════════════════════════════════════
+const SETTINGS_KEY = "lactate-tracker-settings-v1";
+const DEFAULT_SETTINGS = { hmLactate: 3.0, fmLactate: 2.5 };
+
+const loadSettings = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+    return { ...DEFAULT_SETTINGS, ...saved };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+};
+
+const saveSettings = (s) => {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {}
+};
+
+// ═══════════════════════════════════════════════════════════════════
 // UTILITIES
 // ═══════════════════════════════════════════════════════════════════
 const fmt = (iso, short = false) => {
@@ -222,14 +241,14 @@ const buildModel = (sessions) => {
     const typeValid = typeEntries.filter(e =>
       e.lactate >= 1.5 && e.lactate <= 6.5 && paceToSec(e.speed) !== null && e.pulse > 60);
     const typeModel = buildModelFor(typeEntries, now);
-    perType[type] = typeModel || base;
+    perType[type] = typeModel;   // null if < 3 valid type-specific measurements
     const latest = typeValid.length
       ? typeValid.reduce((a, b) => new Date(a.date) > new Date(b.date) ? a : b)
       : null;
     meta[type] = {
       nValid:    typeValid.length,
       nTotal:    typeEntries.length,
-      fallback:  !typeModel,
+      hasModel:  !!typeModel,
       latestDate: latest?.date ?? null,
     };
   }
@@ -386,9 +405,12 @@ function MetricInput({ label, unit, value, onChange, onBlur, placeholder, type, 
 }
 
 function ZoneCard({ label, sub, lactate, color, pace, pulse, meta }) {
+  const hasData = meta?.hasModel !== false;
+  const missing = meta ? Math.max(0, 3 - meta.nValid) : 0;
   return (
-    <Card padded={false} style={{ overflow: "hidden", display: "flex", alignItems: "stretch" }}>
-      <div style={{ width: 4, background: color, flexShrink: 0 }} />
+    <Card padded={false} style={{ overflow: "hidden", display: "flex", alignItems: "stretch",
+      opacity: hasData ? 1 : 0.75 }}>
+      <div style={{ width: 4, background: hasData ? color : T.dim, flexShrink: 0 }} />
       <div style={{ padding: "14px 18px", flex: 1, display: "flex", alignItems: "center",
         justifyContent: "space-between", flexWrap: "wrap", gap: 14 }}>
         <div>
@@ -399,27 +421,32 @@ function ZoneCard({ label, sub, lactate, color, pace, pulse, meta }) {
           </div>
           {meta && (
             <div style={{ fontSize: 11, marginTop: 4,
-              color: meta.fallback ? T.warn : T.muted }}>
-              {meta.fallback
-                ? `Felles modell — for få ${meta.typeLabel}-målinger (${meta.nValid})`
-                : `${meta.nValid} ${meta.typeLabel}-målinger${meta.latestDate ? ` · sist ${fmt(meta.latestDate, true)}` : ""}`}
+              color: hasData ? T.muted : T.warn }}>
+              {hasData
+                ? `${meta.nValid} ${meta.typeLabel}-målinger${meta.latestDate ? ` · sist ${fmt(meta.latestDate, true)}` : ""}`
+                : `Trenger ${missing} ${missing === 1 ? "måling" : "målinger"} til (har ${meta.nValid})`}
             </div>
           )}
         </div>
-        <div style={{ display: "flex", gap: 22 }}>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 24, fontFamily: "'Fraunces', Georgia, serif",
-              fontWeight: 500, color: T.sage700, fontVariantNumeric: "tabular-nums" }}>{pace}</div>
-            <div style={{ fontSize: 10, color: T.muted, letterSpacing: 1,
-              textTransform: "uppercase" }}>min/km</div>
+        {hasData ? (
+          <div style={{ display: "flex", gap: 22 }}>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 24, fontFamily: "'Fraunces', Georgia, serif",
+                fontWeight: 500, color: T.sage700, fontVariantNumeric: "tabular-nums" }}>{pace}</div>
+              <div style={{ fontSize: 10, color: T.muted, letterSpacing: 1,
+                textTransform: "uppercase" }}>min/km</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 24, fontFamily: "'Fraunces', Georgia, serif",
+                fontWeight: 500, color: T.pulse, fontVariantNumeric: "tabular-nums" }}>{pulse ?? "—"}</div>
+              <div style={{ fontSize: 10, color: T.muted, letterSpacing: 1,
+                textTransform: "uppercase" }}>bpm</div>
+            </div>
           </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 24, fontFamily: "'Fraunces', Georgia, serif",
-              fontWeight: 500, color: T.pulse, fontVariantNumeric: "tabular-nums" }}>{pulse ?? "—"}</div>
-            <div style={{ fontSize: 10, color: T.muted, letterSpacing: 1,
-              textTransform: "uppercase" }}>bpm</div>
-          </div>
-        </div>
+        ) : (
+          <div style={{ fontSize: 22, fontFamily: "'Fraunces', Georgia, serif",
+            fontWeight: 500, color: T.dim }}>—</div>
+        )}
       </div>
     </Card>
   );
@@ -795,9 +822,11 @@ function formatRaceTime(totalSeconds) {
     : `${m}:${s.toString().padStart(2,"0")}`;
 }
 
-function RacePrediction({ model }) {
-  const hmPaceSec = model.slope === 0 ? null : (3.0 - model.intercept) / model.slope;
-  const fmPaceSec = model.lo;
+function RacePrediction({ model, settings }) {
+  const hmLac = settings?.hmLactate ?? 3.0;
+  const fmLac = settings?.fmLactate ?? 2.5;
+  const hmPaceSec = model.slope === 0 ? null : (hmLac - model.intercept) / model.slope;
+  const fmPaceSec = model.slope === 0 ? null : (fmLac - model.intercept) / model.slope;
   if (!hmPaceSec || !fmPaceSec || hmPaceSec <= 0 || fmPaceSec <= 0) return null;
   const HM_DIST = 21.0975, FM_DIST = 42.195;
   const hmTimeSec = hmPaceSec * HM_DIST;
@@ -805,10 +834,10 @@ function RacePrediction({ model }) {
   const fmFinalSec = (fmTimeSec + hmTimeSec * Math.pow(FM_DIST / HM_DIST, RIEGEL)) / 2;
   const fmFinalPace = fmFinalSec / FM_DIST;
   const races = [
-    { label: "Halvmaraton", dist: "21.1 km", lacRef: "3.0 mmol/L",
+    { label: "Halvmaraton", dist: "21.1 km", lacRef: `${hmLac.toFixed(1)} mmol/L`,
       time: hmTimeSec, pace: hmPaceSec, color: T.clay,
-      sub: hmTimeSec < 5400 ? "Sub-90" : hmTimeSec < 6000 ? "Sub-1:40" : null },
-    { label: "Maraton", dist: "42.2 km", lacRef: "2.5 mmol/L",
+      sub: hmTimeSec < 4800 ? "Sub-1:20" : hmTimeSec < 5100 ? "Sub-1:25" : hmTimeSec < 5400 ? "Sub-1:30" : hmTimeSec < 6000 ? "Sub-1:40" : null },
+    { label: "Maraton", dist: "42.2 km", lacRef: `${fmLac.toFixed(1)} mmol/L`,
       time: fmFinalSec, pace: fmFinalPace, color: T.sage600,
       sub: fmFinalSec < 10800 ? "Sub-3:00" : fmFinalSec < 11400 ? "Sub-3:10" : fmFinalSec < 12000 ? "Sub-3:20" : null },
   ];
@@ -849,6 +878,83 @@ function RacePrediction({ model }) {
         HM basert på terskel-pace · FM fra laktatmodell kombinert med Riegel fra HM (eksp. 1.06).
       </div>
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RACE LACTATE SETTINGS
+// ═══════════════════════════════════════════════════════════════════
+function RaceLactateSettings({ settings, onChange }) {
+  const setHM = (v) => {
+    const n = parseFloat(v);
+    if (!isNaN(n) && n >= 1.5 && n <= 6.0) onChange({ ...settings, hmLactate: n });
+  };
+  const setFM = (v) => {
+    const n = parseFloat(v);
+    if (!isNaN(n) && n >= 1.0 && n <= 5.0) onChange({ ...settings, fmLactate: n });
+  };
+  const reset = () => onChange(DEFAULT_SETTINGS);
+
+  const isCustom = settings.hmLactate !== DEFAULT_SETTINGS.hmLactate
+                || settings.fmLactate !== DEFAULT_SETTINGS.fmLactate;
+
+  return (
+    <Card style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between",
+        alignItems: "center", marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 14, fontFamily: "'Fraunces', Georgia, serif",
+            fontWeight: 500, color: T.text }}>Personlige terskelverdier</div>
+          <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
+            Hvilken laktat løper du HM og FM på? Påvirker bare prognosene.
+          </div>
+        </div>
+        {isCustom && (
+          <button onClick={reset}
+            style={{ background: "transparent", border: `1px solid ${T.border}`,
+              color: T.textDim, borderRadius: 8, padding: "5px 12px",
+              fontSize: 12, fontFamily: "inherit", cursor: "pointer" }}>
+            Tilbakestill
+          </button>
+        )}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div style={{ background: T.bg2, border: `1px solid ${T.border}`,
+          borderRadius: 10, padding: "10px 12px" }}>
+          <div style={{ fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase",
+            color: T.textDim, fontWeight: 600, marginBottom: 4 }}>Halvmaraton</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+            <input type="number" step="0.1" min="1.5" max="6"
+              value={settings.hmLactate}
+              onChange={e => setHM(e.target.value)}
+              style={{ width: 70, background: "transparent", border: "none",
+                color: T.clay, fontSize: 22, fontFamily: "'Fraunces', Georgia, serif",
+                fontWeight: 500, fontVariantNumeric: "tabular-nums",
+                padding: 0, outline: "none" }} />
+            <span style={{ fontSize: 12, color: T.muted }}>mmol/L</span>
+          </div>
+        </div>
+        <div style={{ background: T.bg2, border: `1px solid ${T.border}`,
+          borderRadius: 10, padding: "10px 12px" }}>
+          <div style={{ fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase",
+            color: T.textDim, fontWeight: 600, marginBottom: 4 }}>Maraton</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+            <input type="number" step="0.1" min="1" max="5"
+              value={settings.fmLactate}
+              onChange={e => setFM(e.target.value)}
+              style={{ width: 70, background: "transparent", border: "none",
+                color: T.sage600, fontSize: 22, fontFamily: "'Fraunces', Georgia, serif",
+                fontWeight: 500, fontVariantNumeric: "tabular-nums",
+                padding: 0, outline: "none" }} />
+            <span style={{ fontSize: 12, color: T.muted }}>mmol/L</span>
+          </div>
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: T.muted, marginTop: 10, lineHeight: 1.6 }}>
+        Standard 3.0 / 2.5 passer godt trente mosjonister. Raskere løpere ligger høyere:
+        sub-1:25 HM ofte på 3.5–4.0, sub-1:20 nærmere 4.0.
+      </div>
+    </Card>
   );
 }
 
@@ -1197,7 +1303,7 @@ function HistoryView({ sessions, setSessions }) {
 // ═══════════════════════════════════════════════════════════════════
 // ZONES VIEW
 // ═══════════════════════════════════════════════════════════════════
-function ZonesView({ sessions }) {
+function ZonesView({ sessions, settings, onSettingsChange }) {
   const totalEntries = sessions.reduce((n, s) => n + s.entries.length, 0);
   const model = useMemo(() => buildModel(sessions), [sessions]);
   const drift = useMemo(() => computeThresholdDrift(sessions), [sessions]);
@@ -1245,35 +1351,45 @@ function ZonesView({ sessions }) {
             </div>
           </Card>
 
-          {/* Zone recommendations.
-              Medium clamped so it never becomes slower (higher sec/km) than Long. */}
+          {/* Zone recommendations — strict per-type isolation.
+              Each card uses only data from its own interval type.
+              Medium pace is clamped so it never becomes slower than Long (when both exist). */}
           {(() => {
-            const longPaceSec = model.perType.Long.paceAt(3.5);
-            let medPaceSec   = model.perType.Medium.paceAt(3.5);
-            let medPulse     = model.perType.Medium.pulseAt(3.5);
-            if (longPaceSec > 0 && medPaceSec > longPaceSec) {
+            const longModel = model.perType.Long;
+            const medModel  = model.perType.Medium;
+            const shortModel = model.perType.Short;
+
+            const longPaceSec  = longModel ? longModel.paceAt(3.5) : null;
+            const longPulse    = longModel ? longModel.pulseAt(3.5) : null;
+
+            let medPaceSec     = medModel ? medModel.paceAt(3.5) : null;
+            let medPulse       = medModel ? medModel.pulseAt(3.5) : null;
+            if (medPaceSec != null && longPaceSec != null && medPaceSec > longPaceSec) {
               medPaceSec = longPaceSec;
-              const longPulse = model.perType.Long.pulseAt(3.5);
               if (longPulse != null && (medPulse == null || medPulse < longPulse)) medPulse = longPulse;
             }
+
+            const shortPaceSec = shortModel ? shortModel.paceAt(4.5) : null;
+            const shortPulse   = shortModel ? shortModel.pulseAt(4.5) : null;
+
             return (
               <>
                 <Eyebrow>Anbefalt tempo</Eyebrow>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
                   <ZoneCard label="Lange intervaller" sub="8+ min · 3.5 mmol/L" lactate="3.5 mmol/L"
                     color={T.sage600}
-                    pace={secToPace(longPaceSec)}
-                    pulse={model.perType.Long.pulseAt(3.5)}
+                    pace={longPaceSec != null ? secToPace(longPaceSec) : "—"}
+                    pulse={longPulse}
                     meta={{ ...model.meta.Long, typeLabel: "Long" }} />
                   <ZoneCard label="Middels intervaller" sub="4–8 min · 3.5 mmol/L" lactate="3.5 mmol/L"
                     color="#C89B3C"
-                    pace={secToPace(medPaceSec)}
+                    pace={medPaceSec != null ? secToPace(medPaceSec) : "—"}
                     pulse={medPulse}
                     meta={{ ...model.meta.Medium, typeLabel: "Medium" }} />
                   <ZoneCard label="Korte intervaller" sub="< 3 min · 4.5 mmol/L" lactate="4.5 mmol/L"
                     color="#A85858"
-                    pace={secToPace(model.perType.Short.paceAt(4.5))}
-                    pulse={model.perType.Short.pulseAt(4.5)}
+                    pace={shortPaceSec != null ? secToPace(shortPaceSec) : "—"}
+                    pulse={shortPulse}
                     meta={{ ...model.meta.Short, typeLabel: "Short" }} />
                 </div>
               </>
@@ -1287,7 +1403,8 @@ function ZonesView({ sessions }) {
           )}
 
           <div style={{ marginBottom: 28 }}>
-            <RacePrediction model={model} />
+            <RaceLactateSettings settings={settings} onChange={onSettingsChange} />
+            <RacePrediction model={model} settings={settings} />
           </div>
 
           <LactateScatter sessions={sessions} model={model} />
@@ -1419,6 +1536,8 @@ export default function LactateTracker() {
   const [view, setView]         = useState("log");
   const [user, setUser]         = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [settings, setSettingsState] = useState(() => loadSettings());
+  const updateSettings = (s) => { setSettingsState(s); saveSettings(s); };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -1571,7 +1690,7 @@ export default function LactateTracker() {
           <div className="main-inner">
             {view === "log"     && <LogView     sessions={sessions} setSessions={setSessions} />}
             {view === "history" && <HistoryView sessions={sessions} setSessions={setSessions} />}
-            {view === "zones"   && <ZonesView   sessions={sessions} />}
+            {view === "zones"   && <ZonesView   sessions={sessions} settings={settings} onSettingsChange={updateSettings} />}
           </div>
         </main>
 
